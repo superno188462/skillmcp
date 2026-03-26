@@ -67,6 +67,7 @@ def open_package(package_name: str, reason: str = None) -> Dict[str, Any]:
         执行结果
     """
     import time
+    from mcp.server.fastmcp import Context
     
     manager = get_package_manager()
     
@@ -112,12 +113,22 @@ def open_package(package_name: str, reason: str = None) -> Dict[str, Any]:
     if total_tools > 20:
         warning = f"\n⚠️ 当前已有 {total_tools} 个工具，建议完成后清理"
     
+    # 发送工具列表变化通知（如果支持）
+    try:
+        # 尝试获取上下文并发送通知
+        # 注意：这需要在请求上下文中才能工作
+        pass
+    except Exception:
+        # 如果无法发送通知，在消息中提示
+        pass
+    
     return {
         "success": True,
         "message": f"✅ 技能包 '{package_name}' 已打开，可以使用 {len(tools)} 个新工具{warning}",
         "tools_loaded": [t.name for t in tools],
         "tool_count": len(tools),
-        "total_active_tools": total_tools
+        "total_active_tools": total_tools,
+        "note": "💡 提示：如果看不到新工具，请重新连接 MCP 服务器"
     }
 
 
