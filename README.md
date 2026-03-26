@@ -105,6 +105,41 @@ fastmcp dev skillmcp/server.py
 
 ---
 
+## 📖 使用流程
+
+### 完整交互流程
+
+```
+1. 初始连接 → AI 调用 list_packages() 查看可用技能包
+2. 分析需求 → AI 确定需要哪个技能包
+3. 申请加载 → AI 调用 open_package(package_name)
+4. 工具暴露 → 技能包内的工具自动出现在工具列表
+5. 使用工具 → AI 调用新加载的工具完成任务
+6. 可选清理 → 调用 close_package() 关闭不需要的技能包
+```
+
+**详细示例请查看**：[使用流程文档](docs/USAGE_FLOW.md)
+
+### 示例对话
+
+```
+用户：帮我查询北京今天的天气
+
+AI（思考）：需要 weather 技能包和 web 技能包
+AI（调用）：open_package(package_name="weather")
+系统：✅ 技能包 'weather' 已打开，现在可以使用 2 个新工具
+
+AI（调用）：open_package(package_name="web")
+系统：✅ 技能包 'web' 已打开，现在可以使用 4 个新工具
+
+AI（调用）：get_current_weather(city="北京")
+系统：{"city": "北京", "temperature": 25, "condition": "晴", ...}
+
+AI（回复）：北京今天晴，温度 25°C...
+```
+
+---
+
 ## ✨ 核心特性
 
 ### ⚙️ 配置驱动的技能包管理
