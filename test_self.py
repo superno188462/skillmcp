@@ -41,10 +41,10 @@ def test_initialization():
     
     assert manager is not None, "管理器初始化失败"
     assert len(manager.packages) > 0, "没有发现任何技能包"
-    assert "base" in manager.active_packages, "base 技能包应该默认激活"
+    assert len(manager.active_packages) == 0, "初始状态应该没有激活的技能包"
     
     print(f"✅ 发现 {len(manager.packages)} 个技能包")
-    print(f"✅ 已激活：{manager.active_packages}")
+    print(f"✅ 已激活：{manager.active_packages}（初始为空）")
 
 
 def test_list_packages_resource():
@@ -56,18 +56,17 @@ def test_list_packages_resource():
     
     assert resource is not None, "技能包资源为空"
     assert "SkillMCP 可用技能包列表" in resource, "资源格式错误"
-    assert "base" in resource, "缺少 base 技能包"
     assert "web" in resource, "缺少 web 技能包"
+    assert "base" not in resource, "不应该有 base 技能包"
     
     print("✅ 技能包资源格式正确")
+    print("✅ 没有 base 技能包（管理工具不暴露）")
     print("\n资源内容预览:")
     print("-" * 60)
     # 打印前 20 行
     lines = resource.split('\n')[:20]
     for line in lines:
         print(line)
-    if len(resource.split('\n')) > 20:
-        print("...（内容过长，已截断）")
     print("-" * 60)
 
 
@@ -164,7 +163,7 @@ def test_close_all_packages():
     assert result["success"], f"关闭所有技能包失败"
     print(f"✅ {result['message']}")
     print(f"✅ 关闭的包：{result.get('closed_packages', [])}")
-    print(f"✅ 剩余包：{result.get('remaining', [])}")
+    print(f"✅ 剩余包：{result.get('remaining', [])}（应该为空）")
 
 
 def test_workflow():
