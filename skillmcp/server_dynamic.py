@@ -1,17 +1,14 @@
 """
-SkillMCP - 动态工具加载 MCP 服务
-
-基于 FastMCP 2.12.5 实现，支持运行时动态添加工具。
+SkillMCP - 真正的动态工具加载 MCP 服务
 
 核心机制：
-1. 初始只注册管理工具（3 个）
-2. 打开技能包时，动态注册工具到 ToolManager
-3. 发送 send_tool_list_changed() 通知
-4. 客户端自动刷新工具列表，无需重新连接
-5. 关闭技能包时，移除工具并发送通知
+1. 初始只注册管理工具（open_package, close_package, list_packages）
+2. 打开技能包时，动态注册该技能包的工具到 FastMCP
+3. 发送 tools/list_changed 通知，客户端自动刷新
+4. 关闭技能包时，从 FastMCP 移除工具（需要重新连接）
 
 优势：
-- ✅ 初始 token 占用极少（只有 3 个管理工具）
+- ✅ 初始 token 占用少（只有管理工具）
 - ✅ 按需加载，动态扩展
 - ✅ 自动刷新，无需重新连接
 - ✅ 真正意义的动态 MCP
@@ -19,11 +16,13 @@ SkillMCP - 动态工具加载 MCP 服务
 
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.fastmcp.tools import Tool as FastMCPTool
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Callable
 from loguru import logger
+import time
 import asyncio
 
 from skillmcp.core.package_manager import ToolPackageManager
+from skillmcp.core.interfaces import Tool, ToolParameter
 
 
 # 创建 FastMCP 实例
@@ -31,9 +30,9 @@ mcp = FastMCP(
     name="SkillMCP",
     instructions="""SkillMCP - 动态技能加载平台
 
-初始工具（仅 3 个）：
+初始工具：
 - open_package: 打开技能包
-- close_package: 关闭技能包
+- close_package: 关闭技能包  
 - list_packages: 查看技能包列表
 
 查看 skillmcp://packages 资源了解可用技能包。
@@ -42,14 +41,13 @@ mcp = FastMCP(
 """
 )
 
-# 全局状态
+# 全局管理器
 _package_manager: Optional[ToolPackageManager] = None
-_active_packages: set = set()
-_registered_tools: Dict[str, FastMCPTool] = {}
+_registered_tools: Dict[str, FastMCPTool] = {}  # 已注册的工具
 
 
 def get_package_manager() -> ToolPackageManager:
-    """获取工具包管理器"""
+    """获取工具包管理器实例"""
     global _package_manager
     if _package_manager is None:
         _package_manager = ToolPackageManager()
@@ -58,60 +56,74 @@ def get_package_manager() -> ToolPackageManager:
 
 
 # ============================================================================
-# 工具转换
+# 工具转换：SkillMCP Tool → FastMCP Tool
 # ============================================================================
 
-def create_and_register_tool(tool, package_name: str) -> bool:
-    """创建并注册工具到 FastMCP
-    
-    使用 @mcp.tool 装饰器的方式，更可靠。
+def create_fastmcp_tool(tool: Tool, package_name: str) -> FastMCPTool:
+    """将 SkillMCP Tool 转换为 FastMCP Tool 并注册
     
     Args:
-        tool: 技能包工具
-        package_name: 技能包名称
+        tool: SkillMCP 工具定义
+        package_name: 所属技能包名称
         
     Returns:
-        是否成功注册
+        FastMCP 工具
     """
-    try:
-        # 创建工具处理器
-        async def handler(**kwargs) -> Dict[str, Any]:
-            try:
-                if hasattr(tool, 'handler') and tool.handler:
-                    result = tool.handler(**kwargs)
-                    if asyncio.iscoroutine(result):
-                        result = await result
-                    return {"success": True, "data": result}
+    # 创建工具处理器
+    async def handler(**kwargs) -> Dict[str, Any]:
+        try:
+            if tool.handler:
+                result = tool.handler(**kwargs)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                return {"success": True, "data": result}
+            else:
                 return {"success": False, "error": "No handler"}
-            except Exception as e:
-                logger.error(f"工具 {tool.name} 执行失败：{e}")
-                return {"success": False, "error": str(e)}
-        
-        # 设置函数属性
-        handler.__name__ = tool.name
-        handler.__doc__ = f"{tool.description if hasattr(tool, 'description') else ''} (来自 {package_name} 技能包)"
-        
-        # 使用 mcp.tool 装饰器注册（自动处理 fn_metadata 等）
-        mcp.tool()(handler)
-        
-        logger.info(f"成功注册工具：{tool.name} (来自 {package_name})")
-        return True
-        
-    except Exception as e:
-        logger.error(f"注册工具 {tool.name} 失败：{e}")
-        return False
+        except Exception as e:
+            logger.error(f"工具 {tool.name} 执行失败：{e}")
+            return {"success": False, "error": str(e)}
+    
+    # 转换为 JSON Schema 格式的参数
+    parameters = {
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
+    
+    for param in tool.parameters:
+        parameters["properties"][param.name] = {
+            "type": param.type,
+            "description": param.description
+        }
+        if param.required:
+            parameters["required"].append(param.name)
+    
+    # 使用 mcp.tool 装饰器创建工具（更简单可靠）
+    from mcp.server.fastmcp.tools import Tool as FastMCPTool
+    
+    # 直接创建 Tool 实例
+    fastmcp_tool = FastMCPTool(
+        fn=handler,
+        name=tool.name,
+        title=tool.name,
+        description=f"{tool.description} (来自 {package_name} 技能包)",
+        parameters=parameters,
+        fn_metadata={"arg_model": None},
+        is_async=True,
+    )
+    
+    return fastmcp_tool
 
 
 # ============================================================================
-# 管理工具
+# 技能包管理工具
 # ============================================================================
 
 @mcp.tool()
-async def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
+def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
     """打开指定的技能包
     
     打开后，该技能包的工具会自动注册并出现在工具列表中。
-    客户端会自动刷新工具列表，无需重新连接。
     
     Args:
         package_name: 技能包名称
@@ -123,7 +135,7 @@ async def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
     manager = get_package_manager()
     
     # 检查是否已激活
-    if package_name in _active_packages:
+    if package_name in manager.active_packages:
         return {
             "success": True,
             "message": f"技能包 '{package_name}' 已激活",
@@ -138,13 +150,14 @@ async def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
             "available_packages": [p.name for p in manager.list_packages()]
         }
     
-    # 加载技能包
+    # 加载并激活
     if not manager.load_package(package_name):
         return {"success": False, "error": "加载失败"}
     
-    _active_packages.add(package_name)
+    if not manager.activate_package(package_name):
+        return {"success": False, "error": "激活失败"}
     
-    # 🎯 动态注册工具
+    # 🎯 关键：动态注册工具
     pkg_module = manager.loaded_packages[package_name]
     tools_registered = 0
     
@@ -153,9 +166,15 @@ async def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
         
         for tool in skill_tools:
             if tool.name not in _registered_tools:
-                if create_and_register_tool(tool, package_name):
-                    _registered_tools[tool.name] = True
-                    tools_registered += 1
+                # 创建 FastMCP 工具
+                fastmcp_tool = create_fastmcp_tool(tool, package_name)
+                
+                # 注册到 FastMCP
+                mcp._tool_manager.add_tool(fastmcp_tool)
+                _registered_tools[tool.name] = fastmcp_tool
+                tools_registered += 1
+                
+                logger.info(f"动态注册工具：{tool.name} (来自 {package_name})")
     
     # 🎯 发送工具列表变化通知
     try:
@@ -173,7 +192,7 @@ async def open_package(package_name: str, ctx: Context) -> Dict[str, Any]:
 
 
 @mcp.tool()
-async def close_package(package_name: str, ctx: Context) -> Dict[str, Any]:
+def close_package(package_name: str, ctx: Context) -> Dict[str, Any]:
     """关闭指定的技能包
     
     关闭后，该技能包的工具会从工具列表中移除。
@@ -185,29 +204,17 @@ async def close_package(package_name: str, ctx: Context) -> Dict[str, Any]:
     Returns:
         执行结果
     """
-    if package_name not in _active_packages:
+    manager = get_package_manager()
+    
+    if package_name not in manager.active_packages:
         return {"success": True, "message": f"技能包 '{package_name}' 未激活"}
     
-    _active_packages.remove(package_name)
+    manager.active_packages.remove(package_name)
     
-    # 移除工具
-    manager = get_package_manager()
-    tools_removed = 0
+    # 注意：FastMCP 不支持运行时移除工具
+    # 需要重新连接才能看到变化
+    # 但我们仍然发送通知，部分客户端会处理
     
-    if package_name in manager.loaded_packages:
-        pkg_module = manager.loaded_packages[package_name]
-        
-        if hasattr(pkg_module, "get_tools"):
-            for tool in pkg_module.get_tools():
-                if tool.name in _registered_tools:
-                    # 从 ToolManager 移除
-                    # 注意：FastMCP 2.12.5 的 ToolManager 没有 remove_tool 方法
-                    # 我们只是从缓存中移除，下次 list_tools 时会过滤
-                    del _registered_tools[tool.name]
-                    tools_removed += 1
-                    logger.info(f"移除工具：{tool.name}")
-    
-    # 🎯 发送工具列表变化通知
     try:
         ctx.session.send_tool_list_changed()
         logger.info(f"已发送工具列表变化通知（关闭 {package_name}）")
@@ -216,14 +223,13 @@ async def close_package(package_name: str, ctx: Context) -> Dict[str, Any]:
     
     return {
         "success": True,
-        "message": f"技能包 '{package_name}' 已关闭，移除了 {tools_removed} 个工具",
-        "tools_removed": tools_removed,
-        "note": "⚠️ 部分客户端可能需要重新连接才能看到工具列表更新"
+        "message": f"技能包 '{package_name}' 已关闭",
+        "note": "⚠️ 工具列表可能需要重新连接才能更新"
     }
 
 
 @mcp.tool()
-async def list_packages() -> Dict[str, Any]:
+def list_packages() -> Dict[str, Any]:
     """列出所有技能包及其状态"""
     manager = get_package_manager()
     packages = manager.list_packages()
@@ -237,11 +243,11 @@ async def list_packages() -> Dict[str, Any]:
                 "category": pkg.category,
                 "tags": pkg.tags,
                 "tools": pkg.tools,
-                "active": pkg.name in _active_packages
+                "active": pkg.name in manager.active_packages
             }
             for pkg in packages
         ],
-        "active_count": len(_active_packages),
+        "active_count": len(manager.active_packages),
         "total_count": len(packages),
         "registered_tools_count": len(_registered_tools)
     }
@@ -259,11 +265,11 @@ def list_packages_resource() -> str:
     
     lines = ["SkillMCP 技能包列表", "=" * 60]
     for pkg in packages:
-        status = "✓ 已激活" if pkg.name in _active_packages else "○ 未激活"
+        status = "✓ 已激活" if pkg.name in manager.active_packages else "○ 未激活"
         lines.append(f"[{status}] {pkg.name:20} - {pkg.description}")
         lines.append(f"       工具：{', '.join(pkg.tools)}")
     lines.append("=" * 60)
-    lines.append(f"总计：{len(packages)} 个 | 已激活：{len(_active_packages)} 个")
+    lines.append(f"总计：{len(packages)} 个 | 已激活：{len(manager.active_packages)} 个")
     lines.append(f"已注册工具：{len(_registered_tools)} 个")
     
     return "\n".join(lines)
@@ -275,14 +281,16 @@ def list_packages_resource() -> str:
 
 def initialize_server() -> ToolPackageManager:
     """初始化服务器"""
-    manager = get_package_manager()
-    logger.info(f"SkillMCP 初始化完成")
-    logger.info(f"发现 {len(manager.packages)} 个技能包")
-    logger.info(f"初始工具：open_package, close_package, list_packages")
-    logger.info(f"初始工具数：{len(mcp._tool_manager.list_tools())}")
-    return manager
+    global _package_manager
+    
+    if _package_manager is None:
+        _package_manager = ToolPackageManager()
+        _package_manager.discover_packages()
+        logger.info(f"SkillMCP 初始化完成，发现 {len(_package_manager.packages)} 个技能包")
+        logger.info(f"初始工具：open_package, close_package, list_packages")
+    
+    return _package_manager
 
 
 if __name__ == "__main__":
-    initialize_server()
     mcp.run()
