@@ -37,9 +37,9 @@
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true,
-      "description": "核心工具包，始终可用"
+      "description": "基础工具包，默认可用"
     },
     "web": {
       "default_visible": false,
@@ -61,6 +61,25 @@ SKILL_PACKAGE = {
     "tags": ["http", "web", "api"],
 }
 ```
+
+### 📦 工具包结构
+
+**所有工具包都是平等的**，放在 `packages/` 目录下：
+
+```
+packages/
+├── base/           # 基础工具包（默认加载）
+│   ├── __init__.py
+│   └── tools.py
+├── web/            # Web 工具包（按需加载）
+│   ├── __init__.py
+│   └── tools.py
+└── data/           # 数据工具包（按需加载）
+    ├── __init__.py
+    └── tools.py
+```
+
+**没有"核心"概念**，只有 `default_visible` 控制是否默认加载。
 
 ---
 
@@ -123,8 +142,8 @@ gateway = SkillMCPGateway()
 # 发现工具包
 gateway.package_manager.discover_packages("packages")
 
-# 加载核心工具包（默认）
-gateway.open_package("core")
+# 加载基础工具包（默认）
+gateway.open_package("base")
 
 # 处理 AI 请求
 response = await gateway.handle_message({
@@ -158,9 +177,9 @@ AI: 您的订单 12345 已发货，预计 3 天后到达。
 
 ### 内置工具包
 
-| 工具包 | 描述 | 自动加载 |
+| 工具包 | 描述 | 默认加载 |
 |--------|------|---------|
-| `core` | 核心工具（包管理、技能管理） | ✅ |
+| `base` | 基础工具（包管理、技能管理） | ✅ |
 | `web` | Web 相关工具（HTTP 请求、Webhook） | ❌ |
 | `data` | 数据处理工具（文件、数据库） | ❌ |
 | `system` | 系统工具（进程、文件操作） | ❌ |

@@ -23,7 +23,7 @@ vim skillmcp.json
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true
     },
     "web": {
@@ -175,7 +175,7 @@ curl http://localhost:8000/api/v1/packages
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true
     }
   },
@@ -190,7 +190,7 @@ curl http://localhost:8000/api/v1/packages
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true
     },
     "web": {

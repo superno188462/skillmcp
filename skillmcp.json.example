@@ -3,9 +3,9 @@
   "version": "1.0.0",
   
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true,
-      "description": "核心工具包，始终可用"
+      "description": "基础工具包，默认可用"
     },
     "web": {
       "default_visible": false,

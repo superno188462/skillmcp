@@ -46,6 +46,8 @@
 
 **技能包**是 SkillMCP 的基本单位，每个技能包包含一组相关的工具。
 
+**所有技能包都是平等的**，没有"核心"或"特殊"的概念。通过 `default_visible` 字段控制是否默认加载。
+
 ```python
 SKILL_PACKAGE = {
     "name": "web",              # 技能包名称
@@ -77,9 +79,9 @@ SKILL_PACKAGE = {
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true,
-      "description": "核心工具包，始终可用"
+      "description": "基础工具包，默认可用"
     },
     "web": {
       "default_visible": false,
@@ -120,12 +122,12 @@ SKILL_PACKAGE = {
 }
 ```
 
-#### 场景 2：生产环境 - 仅加载核心工具包
+#### 场景 2：生产环境 - 仅加载基础工具包
 
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true
     },
     "*": {
@@ -140,7 +142,7 @@ SKILL_PACKAGE = {
 ```json
 {
   "packages": {
-    "core": {
+    "base": {
       "default_visible": true
     },
     "web": {
