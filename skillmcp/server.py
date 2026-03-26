@@ -110,30 +110,85 @@ def open_package(package_name: str) -> Dict[str, Any]:
         for tool in skill_tools:
             try:
                 # 创建工具处理器
-                async def create_handler(t):
-                    async def handler(**kwargs) -> Dict[str, Any]:
-                        try:
-                            if hasattr(t, 'handler') and t.handler:
-                                result = t.handler(**kwargs)
-                                if asyncio.iscoroutine(result):
-                                    result = await result
-                                return {"success": True, "data": result}
-                            return {"success": False, "error": "No handler"}
-                        except Exception as e:
-                            logger.error(f"工具 {t.name} 执行失败：{e}")
-                            return {"success": False, "error": str(e)}
-                    return handler
+                tool_desc = tool.description if hasattr(tool, 'description') else ''
+                tool_handler = tool.handler if hasattr(tool, 'handler') else None
+                tool_name = tool.name
+                tool_params = tool.parameters if hasattr(tool, 'parameters') and tool.parameters else []
                 
-                handler = create_handler(tool)
-                handler.__name__ = tool.name
-                handler.__doc__ = f"{tool.description} (来自 {package_name} 技能包)"
+                # 使用 inspect 创建有明确签名的处理器
+                import inspect
+                
+                # 构建参数字符串
+                param_strs = []
+                for param in tool_params:
+                    param_name = param.name
+                    param_type = param.type if hasattr(param, 'type') else 'Any'
+                    if param_type == 'object':
+                        param_type = 'Dict[str, Any]'
+                    elif param_type == 'string':
+                        param_type = 'str'
+                    elif param_type == 'number':
+                        param_type = 'float'
+                    elif param_type == 'integer':
+                        param_type = 'int'
+                    elif param_type == 'boolean':
+                        param_type = 'bool'
+                    else:
+                        param_type = 'Any'
+                    
+                    if hasattr(param, 'required') and param.required:
+                        param_strs.append(f"{param_name}: {param_type}")
+                    else:
+                        param_strs.append(f"{param_name}: Optional[{param_type}] = None")
+                
+                params_str = ", ".join(param_strs)
+                
+                # 动态创建函数
+                if tool_handler:
+                    # 创建函数代码
+                    func_code = f"""
+async def handler({params_str}):
+    try:
+        kwargs = {{}}
+        for name, value in locals().items():
+            if name != 'self':
+                kwargs[name] = value
+        result = tool_handler(**kwargs)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return {{"success": True, "data": result}}
+    except Exception as e:
+        logger.error(f"工具执行失败：{{e}}")
+        return {{"success": False, "error": str(e)}}
+"""
+                else:
+                    func_code = f"""
+async def handler({params_str}):
+    return {{"success": False, "error": "No handler"}}
+"""
+                
+                # 执行代码创建函数
+                local_ns = {
+                    'asyncio': asyncio,
+                    'logger': logger,
+                    'tool_handler': tool_handler,
+                    'Optional': Optional,
+                    'Dict': Dict,
+                    'Any': Any
+                }
+                exec(func_code, {}, local_ns)
+                handler = local_ns['handler']
+                
+                # 设置函数属性
+                handler.__name__ = tool_name
+                handler.__doc__ = f"{tool_desc} (来自 {package_name} 技能包)"
                 
                 # 使用 provider.tool 装饰器注册
                 provider.tool()(handler)
-                tool_names.append(tool.name)
+                tool_names.append(tool_name)
                 tools_registered += 1
                 
-                logger.info(f"Provider 注册工具：{tool.name} (来自 {package_name})")
+                logger.info(f"Provider 注册工具：{tool_name} (来自 {package_name})")
                 
             except Exception as e:
                 logger.error(f"注册工具 {tool.name} 失败：{e}")

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-SkillMCP 自测脚本
+SkillMCP 自测脚本 - FastMCP v3 Provider 系统版本
 
-测试完整的技能包加载流程（资源驱动设计）。
+测试完整的技能包加载流程。
 """
 
 import sys
+import asyncio
 from pathlib import Path
 
 # 添加项目路径
@@ -14,15 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 from skillmcp.server import (
     mcp, 
     initialize_server, 
-    _package_manager, 
-    _loaded_tools,
-    list_all_packages,
-    get_package_details,
+    provider,
+    _active_packages,
+    _package_tools,
     open_package,
     close_package,
-    close_all_packages,
-    get_usage_stats,
-    get_package_info
+    list_packages,
 )
 
 
@@ -33,7 +31,7 @@ def print_section(title: str):
     print("=" * 60)
 
 
-def test_initialization():
+async def test_initialization():
     """测试 1: 服务器初始化"""
     print_section("测试 1: 服务器初始化")
     
@@ -41,104 +39,53 @@ def test_initialization():
     
     assert manager is not None, "管理器初始化失败"
     assert len(manager.packages) > 0, "没有发现任何技能包"
-    assert len(manager.active_packages) == 0, "初始状态应该没有激活的技能包"
+    assert len(_active_packages) == 0, "初始状态应该没有激活的技能包"
+    
+    # 检查初始工具
+    initial_tools = await provider.list_tools()
+    assert len(initial_tools) == 3, f"初始应该有 3 个工具，实际有 {len(initial_tools)} 个"
     
     print(f"✅ 发现 {len(manager.packages)} 个技能包")
-    print(f"✅ 已激活：{manager.active_packages}（初始为空）")
+    print(f"✅ 已激活：{_active_packages}（初始为空）")
+    print(f"✅ 初始工具数：{len(initial_tools)}")
+    for tool in initial_tools:
+        print(f"   - {tool.name}")
 
 
-def test_list_packages_resource():
-    """测试 2: 查看技能包资源（核心功能）"""
-    print_section("测试 2: 查看技能包资源（核心功能）")
+async def test_list_packages():
+    """测试 2: 列出技能包"""
+    print_section("测试 2: 列出技能包")
     
-    # 获取技能包列表资源
-    resource = list_all_packages()
+    result = list_packages()
     
-    assert resource is not None, "技能包资源为空"
-    assert "SkillMCP 可用技能包列表" in resource, "资源格式错误"
-    assert "web" in resource, "缺少 web 技能包"
-    assert "base" not in resource, "不应该有 base 技能包"
+    assert result["total_count"] > 0, "列出技能包失败"
+    print(f"✅ 总技能包数：{result['total_count']}")
+    print(f"✅ 已激活：{result['active_count']}")
     
-    print("✅ 技能包资源格式正确")
-    print("✅ 没有 base 技能包（管理工具不暴露）")
-    print("\n资源内容预览:")
-    print("-" * 60)
-    # 打印前 20 行
-    lines = resource.split('\n')[:20]
-    for line in lines:
-        print(line)
-    print("-" * 60)
+    for pkg in result.get("packages", []):
+        status = "✓" if pkg["active"] else "○"
+        print(f"   [{status}] {pkg['name']:20} - {pkg['description'][:50]}")
 
 
-def test_package_details():
-    """测试 3: 查看技能包详情"""
-    print_section("测试 3: 查看技能包详情")
-    
-    # 获取 web 技能包详情
-    details = get_package_details("web")
-    
-    assert details is not None, "技能包详情为空"
-    assert "WEB" in details, "缺少技能包名称"
-    assert "HTTP" in details or "http" in details, "缺少功能描述"
-    assert "open_package" in details, "缺少打开方式说明"
-    
-    print("✅ web 技能包详情格式正确")
-    print("\n详情预览:")
-    print("-" * 60)
-    print(details[:500])  # 打印前 500 字符
-    print("...")
-    print("-" * 60)
-
-
-def test_get_package_info():
-    """测试 4: 获取技能包信息（工具方式）"""
-    print_section("测试 4: 获取技能包信息（工具方式）")
-    
-    result = get_package_info("web")
-    
-    assert result["success"], "获取技能包信息失败"
-    assert "package" in result, "缺少技能包信息"
-    assert result["package"]["name"] == "web", "技能包名称错误"
-    
-    print(f"✅ 技能包信息获取成功")
-    print(f"   名称：{result['package']['name']}")
-    print(f"   版本：{result['package']['version']}")
-    print(f"   描述：{result['package']['description'][:50]}...")
-    print(f"   状态：{'已激活' if result['active'] else '未激活'}")
-
-
-def test_open_package():
-    """测试 5: 打开技能包"""
-    print_section("测试 5: 打开技能包")
+async def test_open_package():
+    """测试 3: 打开技能包"""
+    print_section("测试 3: 打开技能包")
     
     # 打开 web 技能包
-    result = open_package(package_name="web", reason="测试 HTTP 功能")
+    result = open_package(package_name="web")
     
     assert result["success"], f"打开技能包失败：{result.get('error')}"
     print(f"✅ {result['message']}")
     
-    if result.get("tools_loaded"):
-        print(f"✅ 加载的工具：{result['tools_loaded']}")
-    else:
-        print(f"ℹ️  工具在 server.py 中静态定义")
+    # 检查工具是否注册
+    all_tools = await provider.list_tools()
+    print(f"✅ 当前工具数：{len(all_tools)}")
+    print(f"✅ 已注册的技能包工具：{_package_tools}")
 
 
-def test_get_usage_stats():
-    """测试 6: 查看使用统计"""
-    print_section("测试 6: 查看使用统计")
-    
-    stats = get_usage_stats()
-    
-    print(f"✅ 已激活技能包：{stats['active_packages']}")
-    print(f"✅ 技能包数量：{stats['active_package_count']}")
-    print(f"✅ 工具数量：{stats['active_tools_count']}")
-    print(f"✅ 估算 Token: {stats['estimated_token_usage']}")
-    print(f"✅ 状态：{stats.get('warning', '✅ 工具数量合理')}")
-
-
-def test_close_package():
-    """测试 7: 关闭单个技能包"""
-    print_section("测试 7: 关闭单个技能包")
+async def test_close_package():
+    """测试 4: 关闭技能包"""
+    print_section("测试 4: 关闭技能包")
     
     # 先打开
     open_package(package_name="web")
@@ -148,44 +95,34 @@ def test_close_package():
     
     assert result["success"], f"关闭技能包失败"
     print(f"✅ {result['message']}")
+    
+    # 检查工具是否移除
+    all_tools = await provider.list_tools()
+    print(f"✅ 当前工具数：{len(all_tools)}")
 
 
-def test_close_all_packages():
-    """测试 8: 关闭所有技能包"""
-    print_section("测试 8: 关闭所有技能包")
+async def test_workflow():
+    """测试 5: 完整工作流程"""
+    print_section("测试 5: 完整工作流程")
     
-    # 先打开多个技能包
-    open_package(package_name="web")
+    print("步骤 1: 初始化服务器")
+    manager = initialize_server()
+    print("✅ 服务器已初始化")
     
-    # 关闭所有（不排除）
-    result = close_all_packages(exclude=[])
+    print("\n步骤 2: 查看技能包列表")
+    packages = list_packages()
+    print(f"✅ 发现 {packages['total_count']} 个技能包")
     
-    assert result["success"], f"关闭所有技能包失败"
-    print(f"✅ {result['message']}")
-    print(f"✅ 关闭的包：{result.get('closed_packages', [])}")
-    print(f"✅ 剩余包：{result.get('remaining', [])}（应该为空）")
-
-
-def test_workflow():
-    """测试 9: 完整工作流程"""
-    print_section("测试 9: 完整工作流程")
-    
-    print("步骤 1: AI 查看技能包资源")
-    resource = list_all_packages()
-    print("✅ 已查看技能包列表")
-    
-    print("\n步骤 2: AI 分析需要 web 技能包")
-    print("✅ 决定打开 web 技能包")
-    
-    print("\n步骤 3: AI 打开技能包")
-    result = open_package(package_name="web", reason="需要 HTTP 功能")
+    print("\n步骤 3: 打开 web 技能包")
+    result = open_package(package_name="web")
     assert result["success"]
     print(f"✅ {result['message']}")
     
-    print("\n步骤 4: AI 使用技能包中的工具")
-    print("✅ （工具调用测试）")
+    print("\n步骤 4: 检查工具列表")
+    tools = await provider.list_tools()
+    print(f"✅ 当前工具数：{len(tools)}")
     
-    print("\n步骤 5: AI 关闭技能包")
+    print("\n步骤 5: 关闭 web 技能包")
     result = close_package(package_name="web")
     assert result["success"]
     print(f"✅ {result['message']}")
@@ -193,22 +130,18 @@ def test_workflow():
     print("\n✅ 完整工作流程测试通过")
 
 
-def main():
+async def main():
     """运行所有测试"""
     print("\n")
     print("╔" + "=" * 58 + "╗")
-    print("║" + " " * 12 + "SkillMCP 自测脚本（资源驱动设计）" + " " * 8 + "║")
+    print("║" + " " * 10 + "SkillMCP 自测脚本 (FastMCP v3 Provider)" + " " * 5 + "║")
     print("╚" + "=" * 58 + "╝")
     
     tests = [
         ("服务器初始化", test_initialization),
-        ("查看技能包资源", test_list_packages_resource),
-        ("查看技能包详情", test_package_details),
-        ("获取技能包信息", test_get_package_info),
+        ("列出技能包", test_list_packages),
         ("打开技能包", test_open_package),
-        ("查看使用统计", test_get_usage_stats),
-        ("关闭单个技能包", test_close_package),
-        ("关闭所有技能包", test_close_all_packages),
+        ("关闭技能包", test_close_package),
         ("完整工作流程", test_workflow),
     ]
     
@@ -217,7 +150,7 @@ def main():
     
     for test_name, test_func in tests:
         try:
-            test_func()
+            await test_func()
             passed += 1
         except AssertionError as e:
             print(f"\n❌ {test_name} 失败：{e}")
@@ -240,4 +173,5 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    exit_code = asyncio.run(main())
+    sys.exit(exit_code)
