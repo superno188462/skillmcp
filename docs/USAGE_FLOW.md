@@ -86,7 +86,8 @@ open_package(package_name="weather")
   "package_name": "weather",
   "tools_loaded": ["get_current_weather", "get_forecast"],
   "tool_count": 2,
-  "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们"
+  "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们",
+  "reminder": "💡 提示：任务完成后记得调用 close_all_packages() 关闭不需要的技能包"
 }
 
 // 调用 2：打开 Web 工具包（天气查询需要 HTTP）
@@ -99,7 +100,8 @@ open_package(package_name="web")
   "package_name": "web",
   "tools_loaded": ["http_get", "http_post", "http_put", "http_delete"],
   "tool_count": 4,
-  "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们"
+  "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们",
+  "reminder": "💡 提示：任务完成后记得调用 close_all_packages() 关闭不需要的技能包"
 }
 ```
 
@@ -154,31 +156,117 @@ get_current_weather(city="北京")
 
 ---
 
-#### 步骤 5（可选）：关闭不再需要的技能包
+#### 步骤 5：清理技能包（重要！）
 
-**AI 思考**：天气查询完成，可以关闭不再需要的技能包
+**任务完成后，AI 主动清理：**
 
 ```json
 // 调用
-close_package(package_name="weather")
+close_all_packages(exclude=["base"])
 
 // 返回
 {
   "success": true,
-  "message": "技能包 'weather' 已关闭",
-  "package_name": "weather"
-}
-
-// 调用
-close_package(package_name="web")
-
-// 返回
-{
-  "success": true,
-  "message": "技能包 'web' 已关闭",
-  "package_name": "web"
+  "message": "已关闭 2 个技能包",
+  "closed_packages": ["weather", "web"],
+  "remaining": ["base"],
+  "suggestion": "建议：任务完成后调用此工具清理不需要的技能包"
 }
 ```
+
+---
+
+## ⚠️ 工具累积问题
+
+### 问题描述
+
+如果 AI 不主动关闭技能包，工具会越积越多：
+
+```
+任务 1: 查询天气 → 打开 weather + web (6 个工具)
+任务 2: 处理文件 → 打开 file (4 个工具) → 累计 10 个工具
+任务 3: 数据库操作 → 打开 database (8 个工具) → 累计 18 个工具
+任务 4: 图像处理 → 打开 image (5 个工具) → 累计 23 个工具 ⚠️
+...
+```
+
+**影响**：
+- ❌ Token 消耗增加（每个工具约 50-100 tokens）
+- ❌ 响应速度变慢
+- ❌ 工具选择混淆风险增加
+- ❌ 上下文窗口占用过大
+
+### 解决方案
+
+#### 1. 手动清理（推荐）
+
+每个任务完成后，主动关闭不需要的技能包：
+
+```python
+# 任务完成后
+close_all_packages(exclude=["base"])
+```
+
+#### 2. 定期检查
+
+使用 `get_usage_stats()` 查看工具使用情况：
+
+```python
+# 查看统计
+get_usage_stats()
+
+# 返回示例
+{
+  "active_packages": ["base", "weather", "web", "file"],
+  "active_package_count": 4,
+  "active_tools_count": 18,
+  "estimated_token_usage": 1350,
+  "warning": "⚠️ 工具数量过多可能影响性能",
+  "suggestion": "建议调用 close_all_packages() 关闭不需要的技能包"
+}
+```
+
+#### 3. 设置阈值
+
+当工具数量超过阈值时，主动清理：
+
+```python
+# 检查工具数量
+stats = get_usage_stats()
+if stats["active_tools_count"] > 20:
+    # 关闭不需要的技能包
+    close_all_packages(exclude=["base"])
+```
+
+### 最佳实践
+
+```python
+# 开始任务
+open_package("weather")
+open_package("web")
+
+# 使用工具
+result = get_current_weather(city="北京")
+
+# 回复用户
+print(f"北京天气：{result}")
+
+# ✅ 任务完成，立即清理
+close_all_packages(exclude=["base"])
+
+# 或者单独关闭
+close_package("weather")
+close_package("web")
+```
+
+### 清理策略建议
+
+| 场景 | 清理策略 |
+|------|---------|
+| 单次任务 | 任务完成后立即 `close_all_packages()` |
+| 连续相关任务 | 一批任务完成后统一清理 |
+| 长时间会话 | 每 30 分钟或每 5 个任务清理一次 |
+| 工具数 > 20 | 立即清理，保留必需的包 |
 
 ---
 
@@ -206,95 +294,7 @@ close_package(package_name="web")
 
 - 可以随时打开/关闭技能包
 - 支持多个技能包同时激活
-- 工具数量动态变化
-
----
-
-## 📋 完整对话示例
-
-```
-用户：帮我查询北京今天的天气
-
-AI（思考）：
-1. 需要查询天气 → 需要 weather 技能包
-2. 天气查询需要 HTTP 请求 → 需要 web 技能包
-3. 检查当前状态：两个包都未激活
-4. 行动：打开这两个技能包
-
-AI（调用）：open_package(package_name="weather")
-系统：✅ 技能包 'weather' 已打开，现在可以使用 2 个新工具
-
-AI（调用）：open_package(package_name="web")
-系统：✅ 技能包 'web' 已打开，现在可以使用 4 个新工具
-
-AI（调用）：get_current_weather(city="北京")
-系统：{"city": "北京", "temperature": 25, "condition": "晴", ...}
-
-AI（回复）：
-北京今天的天气：
-- 🌡️ 温度：25°C
-- ☀️ 天气：晴
-- 💧 湿度：45%
-- 💨 风速：10 km/h
-
-适合外出活动！
-```
-
----
-
-## 🔧 配置示例
-
-### 开发环境 - 自动加载所有技能包
-
-```json
-{
-  "packages": {
-    "*": {
-      "default_visible": true
-    }
-  }
-}
-```
-
-### 生产环境 - 最小化加载
-
-```json
-{
-  "packages": {
-    "base": {
-      "default_visible": true
-    },
-    "*": {
-      "default_visible": false
-    }
-  }
-}
-```
-
-### 按需加载 - 推荐
-
-```json
-{
-  "packages": {
-    "base": {
-      "default_visible": true
-    }
-  },
-  "features": {
-    "auto_load_defaults": false
-  }
-}
-```
-
----
-
-## 💡 最佳实践
-
-1. **初始状态最小化** - 只加载必需的技能包
-2. **按需加载** - 根据需求动态打开技能包
-3. **及时清理** - 使用完毕后关闭不需要的技能包
-4. **错误处理** - 检查 `open_package()` 返回值，确认加载成功
-5. **依赖管理** - 注意技能包之间的依赖关系（如 weather 依赖 web）
+- **工具会累积，需要主动清理** ⚠️
 
 ---
 

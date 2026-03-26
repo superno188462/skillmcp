@@ -30,15 +30,26 @@ mcp = FastMCP(
 2. 分析需求，确定需要哪个技能包
 3. 调用 open_package(package_name) 打开技能包
 4. 技能包打开后，其中的工具会自动出现在你的工具列表中
-5. 使用完毕后，可以调用 close_package(package_name) 关闭技能包
+5. 使用完毕后，调用 close_package(package_name) 或 close_all_packages() 关闭技能包
 
-初始状态下，只有基础工具包 (base) 是打开的。
+重要提醒：
+- 初始状态下，只有基础工具包 (base) 是打开的
+- 工具会累积，不会自动关闭
+- 建议每个任务完成后调用 close_all_packages() 清理不需要的技能包
+- 工具数量过多 (>20) 会影响性能和增加 token 消耗
+- 使用 get_usage_stats() 查看当前工具使用情况
+
+最佳实践：
+1. 按需加载 - 只在需要时打开技能包
+2. 及时清理 - 任务完成后关闭不需要的技能包
+3. 定期检查 - 使用 get_usage_stats() 监控工具数量
 """
 )
 
 # 全局管理器
 _package_manager: Optional[ToolPackageManager] = None
 _loaded_tools: Dict[str, bool] = {}  # 记录已加载的工具，避免重复
+_package_open_times: Dict[str, float] = {}  # 记录技能包打开时间
 
 
 def get_package_manager() -> ToolPackageManager:
@@ -100,6 +111,8 @@ def open_package(package_name: str) -> Dict[str, Any]:
     Returns:
         执行结果，包含加载的工具列表
     """
+    import time
+    
     manager = get_package_manager()
     
     # 检查是否已激活
@@ -133,6 +146,9 @@ def open_package(package_name: str) -> Dict[str, Any]:
             "error": f"技能包 '{package_name}' 激活失败"
         }
     
+    # 记录打开时间
+    _package_open_times[package_name] = time.time()
+    
     # 获取加载的工具
     pkg_module = manager.loaded_packages[package_name]
     tools = pkg_module.get_tools() if hasattr(pkg_module, "get_tools") else []
@@ -143,13 +159,21 @@ def open_package(package_name: str) -> Dict[str, Any]:
             _register_tool_dynamic(tool)
             _loaded_tools[tool.name] = True
     
+    # 检查工具数量，给出警告
+    total_tools = len(_loaded_tools)
+    warning = ""
+    if total_tools > 20:
+        warning = f"\n\n⚠️ 警告：当前已有 {total_tools} 个工具，建议任务完成后调用 close_all_packages() 清理"
+    
     return {
         "success": True,
-        "message": f"✅ 技能包 '{package_name}' 已打开，现在可以使用 {len(tools)} 个新工具",
+        "message": f"✅ 技能包 '{package_name}' 已打开，现在可以使用 {len(tools)} 个新工具{warning}",
         "package_name": package_name,
         "tools_loaded": [t.name for t in tools],
         "tool_count": len(tools),
-        "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们"
+        "total_active_tools": total_tools,
+        "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们",
+        "reminder": "💡 提示：任务完成后记得调用 close_all_packages() 关闭不需要的技能包"
     }
 
 
@@ -189,6 +213,74 @@ def close_package(package_name: str) -> Dict[str, Any]:
         "success": True,
         "message": f"技能包 '{package_name}' 已关闭",
         "package_name": package_name
+    }
+
+
+@mcp.tool()
+def close_all_packages(exclude: List[str] = None) -> Dict[str, Any]:
+    """关闭所有技能包（可选排除某些包）
+    
+    用于清理不再需要的工具，优化上下文。
+    
+    Args:
+        exclude: 不关闭的技能包名称列表（默认排除 base）
+        
+    Returns:
+        执行结果
+    """
+    manager = get_package_manager()
+    
+    if exclude is None:
+        exclude = ["base"]  # 默认保留 base 包
+    
+    closed = []
+    for pkg_name in list(manager.active_packages):
+        if pkg_name not in exclude:
+            manager.active_packages.remove(pkg_name)
+            manager.deactivate_package(pkg_name)
+            closed.append(pkg_name)
+    
+    # 清理已加载工具标记
+    for pkg_name in closed:
+        pkg_module = manager.loaded_packages.get(pkg_name)
+        if pkg_module and hasattr(pkg_module, "get_tools"):
+            tools = pkg_module.get_tools()
+            for tool in tools:
+                if tool.name in _loaded_tools:
+                    del _loaded_tools[tool.name]
+    
+    return {
+        "success": True,
+        "message": f"已关闭 {len(closed)} 个技能包",
+        "closed_packages": closed,
+        "remaining": list(manager.active_packages),
+        "suggestion": "建议：任务完成后调用此工具清理不需要的技能包"
+    }
+
+
+@mcp.tool()
+def get_usage_stats() -> Dict[str, Any]:
+    """获取技能包使用统计
+    
+    查看当前激活的技能包和工具数量，帮助决定是否清理。
+    
+    Returns:
+        使用统计信息
+    """
+    manager = get_package_manager()
+    tools = manager.get_active_tools()
+    
+    # 估算 token 占用（每个工具描述约 50-100 tokens）
+    estimated_tokens = len(tools) * 75
+    
+    return {
+        "active_packages": list(manager.active_packages),
+        "active_package_count": len(manager.active_packages),
+        "active_tools_count": len(tools),
+        "estimated_token_usage": estimated_tokens,
+        "total_packages": len(manager.packages),
+        "warning": "⚠️ 工具数量过多可能影响性能" if len(tools) > 20 else "✅ 工具数量合理",
+        "suggestion": "建议调用 close_all_packages() 关闭不需要的技能包" if len(tools) > 15 else "当前状态良好"
     }
 
 
