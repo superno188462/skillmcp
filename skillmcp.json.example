@@ -3,10 +3,6 @@
   "version": "1.0.0",
   
   "packages": {
-    "base": {
-      "default_visible": true,
-      "description": "基础工具包，默认可用"
-    },
     "web": {
       "default_visible": false,
       "description": "Web 工具包，按需加载"
@@ -20,7 +16,7 @@
   },
   
   "features": {
-    "auto_load_defaults": true,
+    "auto_load_defaults": false,  # 不自动加载任何技能包
     "allow_dynamic_load": true,
     "tool_timeout": 30
   }

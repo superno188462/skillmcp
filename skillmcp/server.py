@@ -25,9 +25,8 @@ mcp = FastMCP(
     instructions="""你是一个模块化技能管理平台的助手。
 
 可用技能包：
-- base: 基础管理工具（已激活）
-- web: HTTP 请求、Webhook 等网络工具（需打开）
-- data: 数据处理、文件操作工具（需打开）
+- web: HTTP 请求、Webhook 等网络工具
+- data: 数据处理、文件操作工具
 
 使用方式：
 当用户需要某个功能时，你可以说：
@@ -345,20 +344,11 @@ def initialize_server() -> ToolPackageManager:
         _package_manager = ToolPackageManager()
         _package_manager.discover_packages()
         
-        # 自动加载默认可见的技能包
-        for pkg_name, pkg_info in _package_manager.packages.items():
-            if _package_manager._get_package_default_visibility(pkg_name):
-                _package_manager.activate_package(pkg_name)
-                logger.info(f"自动加载默认技能包：{pkg_name}")
-                
-                pkg_module = _package_manager.loaded_packages.get(pkg_name)
-                if pkg_module and hasattr(pkg_module, "get_tools"):
-                    tools = pkg_module.get_tools()
-                    for tool in tools:
-                        _loaded_tools[tool.name] = True
-                        _package_open_times[pkg_name] = time.time()
-        
-        logger.info(f"SkillMCP 初始化完成，已加载 {len(_package_manager.active_packages)} 个技能包")
+        # 不自动加载任何技能包，所有技能包默认都是未激活状态
+        # AI 需要根据需求主动打开技能包
+        logger.info(f"SkillMCP 初始化完成，发现 {len(_package_manager.packages)} 个技能包")
+        logger.info(f"可用技能包：{list(_package_manager.packages.keys())}")
+        logger.info("提示：所有技能包默认未激活，需要时调用 open_package 打开")
     
     return _package_manager
 

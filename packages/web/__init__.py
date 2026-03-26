@@ -11,7 +11,7 @@ SKILL_PACKAGE = {
     "author": "SkillMCP Team",
     "tools": ["http_get", "http_post", "http_put", "http_delete"],
     "dependencies": [],
-    "default_visible": False,  # 默认不显示，按需加载
+    "default_visible": False,  # 默认不激活，需要时打开
     "category": "network",
     "tags": ["http", "web", "network", "api"],
 }
