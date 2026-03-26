@@ -19,11 +19,12 @@ def main():
 @main.command()
 @click.option("--host", default="0.0.0.0", help="服务器地址")
 @click.option("--port", default=8000, help="服务器端口")
-@click.option("--package-dir", default="packages", help="工具包目录")
-@click.option("--skill-dir", default="skills", help="技能目录")
+@click.option("--package-dir", default="packages", help="技能包目录")
+@click.option("--config", default="skillmcp.json", help="配置文件")
 @click.option("--log-level", default="INFO", help="日志级别")
-def start(host, port, package_dir, skill_dir, log_level):
-    """启动 SkillMCP 服务器"""
+@click.option("--transport", default="stdio", type=click.Choice(["stdio", "sse"]), help="传输方式")
+def start(host, port, package_dir, config, log_level, transport):
+    """启动 SkillMCP FastMCP 服务器"""
     logger.remove()
     logger.add(
         lambda msg: click.echo(msg, nl=True),
@@ -31,29 +32,27 @@ def start(host, port, package_dir, skill_dir, log_level):
         level=log_level
     )
     
-    logger.info(f"启动 SkillMCP 服务器 {host}:{port}")
+    logger.info(f"启动 SkillMCP FastMCP 服务器 (transport={transport})")
     
-    # 创建网关
-    gateway = SkillMCPGateway(package_dir=package_dir, skill_dir=skill_dir)
+    # 设置环境变量
+    import os
+    os.environ["SKILLMCP_PACKAGE_DIR"] = package_dir
+    os.environ["SKILLMCP_CONFIG"] = config
     
-    # 初始化
-    asyncio.run(gateway.initialize())
+    # 导入并运行 FastMCP 服务器
+    from skillmcp.server import mcp
     
-    logger.info("SkillMCP 服务器已就绪")
-    logger.info(f"工具包目录：{package_dir}")
-    logger.info(f"技能目录：{skill_dir}")
+    logger.info("SkillMCP FastMCP 服务器已就绪")
+    logger.info(f"技能包目录：{package_dir}")
+    logger.info(f"配置文件：{config}")
     
-    # 显示状态
-    status = gateway.package_manager.get_package_status()
-    logger.info(f"可用工具包：{status['available']}")
-    logger.info(f"激活工具包：{status['active']}")
-    
-    # 保持运行
-    try:
-        while True:
-            asyncio.run(asyncio.sleep(1))
-    except KeyboardInterrupt:
-        logger.info("正在关闭 SkillMCP 服务器...")
+    # 运行服务器
+    if transport == "sse":
+        logger.info(f"SSE 模式：http://{host}:{port}/sse")
+        mcp.run(transport="sse", host=host, port=port)
+    else:
+        logger.info("STDIO 模式：通过标准输入输出通信")
+        mcp.run(transport="stdio")
 
 
 @main.command()

@@ -20,11 +20,11 @@ classifiers = [
 ]
 
 dependencies = [
+    "mcp[cli]>=1.0.0",
+    "fastmcp>=0.1.0",
     "loguru>=0.7.0",
     "requests>=2.31.0",
     "pydantic>=2.0.0",
-    "fastapi>=0.100.0",
-    "uvicorn>=0.23.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +37,9 @@ dev = [
 
 [project.scripts]
 skillmcp = "skillmcp.cli:main"
+
+[tool.setuptools]
+packages = ["skillmcp", "skillmcp.core"]
 
 [build-system]
 requires = ["hatchling"]
