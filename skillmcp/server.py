@@ -1,21 +1,19 @@
 """
 SkillMCP - 基于 FastMCP 的模块化技能管理平台
 
-对外暴露为标准 FastMCP 服务，支持动态加载技能包。
-
-使用流程：
-1. 初始：AI 客户端调用 list_packages() 获取可用技能包列表
-2. 分析：AI 分析需要哪个技能包
-3. 申请：AI 调用 open_package() 打开技能包
-4. 使用：技能包内的工具自动暴露，AI 可以调用
+设计理念：
+1. 初始暴露所有技能包的描述（作为资源）
+2. 技能包描述中说明功能和打开方式
+3. AI 根据描述决定打开哪个技能包
+4. 打开后，技能包内的工具自动可用
 """
 
 from mcp.server.fastmcp import FastMCP
 from typing import Dict, List, Any, Optional
 import asyncio
 from loguru import logger
-from dataclasses import dataclass
 import time
+import json
 
 from skillmcp.core.package_manager import ToolPackageManager
 from skillmcp.core.interfaces import SkillPackage, Tool
@@ -24,33 +22,25 @@ from skillmcp.core.interfaces import SkillPackage, Tool
 # 创建 FastMCP 实例
 mcp = FastMCP(
     name="SkillMCP",
-    instructions="""SkillMCP - 模块化技能管理平台
+    instructions="""你是一个模块化技能管理平台的助手。
 
-使用流程：
-1. 调用 list_packages() 查看所有可用的技能包
-2. 分析需求，确定需要哪个技能包
-3. 调用 open_package(package_name) 打开技能包
-4. 技能包打开后，其中的工具会自动出现在你的工具列表中
-5. 使用完毕后，调用 close_package(package_name) 或 close_all_packages() 关闭技能包
+可用技能包：
+- base: 基础管理工具（已激活）
+- web: HTTP 请求、Webhook 等网络工具（需打开）
+- data: 数据处理、文件操作工具（需打开）
 
-重要提醒：
-- 初始状态下，只有基础工具包 (base) 是打开的
-- 工具会累积，不会自动关闭
-- 建议每个任务完成后调用 close_all_packages() 清理不需要的技能包
-- 工具数量过多 (>20) 会影响性能和增加 token 消耗
-- 使用 get_usage_stats() 查看当前工具使用情况
+使用方式：
+当用户需要某个功能时，你可以说：
+"我可以使用 [技能包名] 技能包来完成这个任务，需要我打开它吗？"
 
-最佳实践：
-1. 按需加载 - 只在需要时打开技能包
-2. 及时清理 - 任务完成后关闭不需要的技能包
-3. 定期检查 - 使用 get_usage_stats() 监控工具数量
+用户同意后，调用 open_package 打开技能包，然后使用其中的工具。
 """
 )
 
 # 全局管理器
 _package_manager: Optional[ToolPackageManager] = None
-_loaded_tools: Dict[str, bool] = {}  # 记录已加载的工具，避免重复
-_package_open_times: Dict[str, float] = {}  # 记录技能包打开时间
+_loaded_tools: Dict[str, bool] = {}
+_package_open_times: Dict[str, float] = {}
 
 
 def get_package_manager() -> ToolPackageManager:
@@ -63,54 +53,19 @@ def get_package_manager() -> ToolPackageManager:
 
 
 # ============================================================================
-# 核心管理工具（始终可用）
+# 核心工具：打开/关闭技能包
 # ============================================================================
 
 @mcp.tool()
-def list_packages() -> Dict[str, Any]:
-    """列出所有可用的技能包
-    
-    这是初始工具，用于查看有哪些技能包可以加载。
-    
-    Returns:
-        包含技能包列表和状态的字典
-    """
-    manager = get_package_manager()
-    packages = manager.list_packages()
-    status = manager.get_package_status()
-    
-    return {
-        "packages": [
-            {
-                "name": pkg.name,
-                "version": pkg.version,
-                "description": pkg.description,
-                "category": pkg.category,
-                "tags": pkg.tags,
-                "default_visible": pkg.default_visible,
-                "active": pkg.name in status["active"],
-                "tools": pkg.tools  # 显示该包包含哪些工具
-            }
-            for pkg in packages
-        ],
-        "status": status,
-        "total": len(packages),
-        "active_count": len(status["active"]),
-        "message": f"当前已激活 {len(status['active'])} 个技能包，共 {len(packages)} 个可用"
-    }
-
-
-@mcp.tool()
-def open_package(package_name: str) -> Dict[str, Any]:
-    """打开指定的技能包，加载其中的工具
-    
-    打开后，该技能包内的所有工具会自动出现在你的工具列表中。
+def open_package(package_name: str, reason: str = None) -> Dict[str, Any]:
+    """打开指定的技能包以使用其中的工具
     
     Args:
-        package_name: 技能包名称（通过 list_packages 查看可用名称）
+        package_name: 技能包名称
+        reason: 打开原因（可选）
         
     Returns:
-        执行结果，包含加载的工具列表
+        执行结果
     """
     import time
     
@@ -120,8 +75,7 @@ def open_package(package_name: str) -> Dict[str, Any]:
     if package_name in manager.active_packages:
         return {
             "success": True,
-            "message": f"技能包 '{package_name}' 已激活，无需重复打开",
-            "package_name": package_name,
+            "message": f"技能包 '{package_name}' 已激活，可以直接使用其中的工具",
             "already_active": True
         }
     
@@ -136,53 +90,41 @@ def open_package(package_name: str) -> Dict[str, Any]:
     
     # 加载并激活
     if not manager.load_package(package_name):
-        return {
-            "success": False,
-            "error": f"技能包 '{package_name}' 加载失败"
-        }
+        return {"success": False, "error": f"技能包 '{package_name}' 加载失败"}
     
     if not manager.activate_package(package_name):
-        return {
-            "success": False,
-            "error": f"技能包 '{package_name}' 激活失败"
-        }
+        return {"success": False, "error": f"技能包 '{package_name}' 激活失败"}
     
     # 记录打开时间
     _package_open_times[package_name] = time.time()
     
-    # 获取加载的工具
+    # 获取工具
     pkg_module = manager.loaded_packages[package_name]
     tools = pkg_module.get_tools() if hasattr(pkg_module, "get_tools") else []
     
-    # 动态注册工具到 FastMCP
+    # 标记工具
     for tool in tools:
         if tool.name not in _loaded_tools:
-            _register_tool_dynamic(tool)
             _loaded_tools[tool.name] = True
     
-    # 检查工具数量，给出警告
+    # 警告
     total_tools = len(_loaded_tools)
     warning = ""
     if total_tools > 20:
-        warning = f"\n\n⚠️ 警告：当前已有 {total_tools} 个工具，建议任务完成后调用 close_all_packages() 清理"
+        warning = f"\n⚠️ 当前已有 {total_tools} 个工具，建议完成后清理"
     
     return {
         "success": True,
-        "message": f"✅ 技能包 '{package_name}' 已打开，现在可以使用 {len(tools)} 个新工具{warning}",
-        "package_name": package_name,
+        "message": f"✅ 技能包 '{package_name}' 已打开，可以使用 {len(tools)} 个新工具{warning}",
         "tools_loaded": [t.name for t in tools],
         "tool_count": len(tools),
-        "total_active_tools": total_tools,
-        "next_step": "现在你可以在工具列表中看到新工具，可以直接调用它们",
-        "reminder": "💡 提示：任务完成后记得调用 close_all_packages() 关闭不需要的技能包"
+        "total_active_tools": total_tools
     }
 
 
 @mcp.tool()
 def close_package(package_name: str) -> Dict[str, Any]:
-    """关闭指定的技能包，卸载其中的工具
-    
-    关闭后，该技能包内的工具将从工具列表中移除。
+    """关闭技能包，释放其中的工具
     
     Args:
         package_name: 技能包名称
@@ -193,38 +135,26 @@ def close_package(package_name: str) -> Dict[str, Any]:
     manager = get_package_manager()
     
     if package_name not in manager.active_packages:
-        return {
-            "success": True,
-            "message": f"技能包 '{package_name}' 未激活",
-            "already_inactive": True
-        }
+        return {"success": True, "message": f"技能包 '{package_name}' 未激活"}
     
     manager.active_packages.remove(package_name)
     manager.deactivate_package(package_name)
     
-    # 从已加载工具中移除标记
+    # 清理标记
     pkg_module = manager.loaded_packages.get(package_name)
     if pkg_module and hasattr(pkg_module, "get_tools"):
-        tools = pkg_module.get_tools()
-        for tool in tools:
-            if tool.name in _loaded_tools:
-                del _loaded_tools[tool.name]
+        for tool in pkg_module.get_tools():
+            _loaded_tools.pop(tool.name, None)
     
-    return {
-        "success": True,
-        "message": f"技能包 '{package_name}' 已关闭",
-        "package_name": package_name
-    }
+    return {"success": True, "message": f"技能包 '{package_name}' 已关闭"}
 
 
 @mcp.tool()
 def close_all_packages(exclude: List[str] = None) -> Dict[str, Any]:
-    """关闭所有技能包（可选排除某些包）
-    
-    用于清理不再需要的工具，优化上下文。
+    """关闭所有技能包（可选排除）
     
     Args:
-        exclude: 不关闭的技能包名称列表（默认排除 base）
+        exclude: 不关闭的技能包列表
         
     Returns:
         执行结果
@@ -232,7 +162,7 @@ def close_all_packages(exclude: List[str] = None) -> Dict[str, Any]:
     manager = get_package_manager()
     
     if exclude is None:
-        exclude = ["base"]  # 默认保留 base 包
+        exclude = []
     
     closed = []
     for pkg_name in list(manager.active_packages):
@@ -241,141 +171,68 @@ def close_all_packages(exclude: List[str] = None) -> Dict[str, Any]:
             manager.deactivate_package(pkg_name)
             closed.append(pkg_name)
     
-    # 清理已加载工具标记
+    # 清理标记
     for pkg_name in closed:
         pkg_module = manager.loaded_packages.get(pkg_name)
         if pkg_module and hasattr(pkg_module, "get_tools"):
-            tools = pkg_module.get_tools()
-            for tool in tools:
-                if tool.name in _loaded_tools:
-                    del _loaded_tools[tool.name]
+            for tool in pkg_module.get_tools():
+                _loaded_tools.pop(tool.name, None)
     
     return {
         "success": True,
         "message": f"已关闭 {len(closed)} 个技能包",
         "closed_packages": closed,
-        "remaining": list(manager.active_packages),
-        "suggestion": "建议：任务完成后调用此工具清理不需要的技能包"
-    }
-
-
-@mcp.tool()
-def get_usage_stats() -> Dict[str, Any]:
-    """获取技能包使用统计
-    
-    查看当前激活的技能包和工具数量，帮助决定是否清理。
-    
-    Returns:
-        使用统计信息
-    """
-    manager = get_package_manager()
-    tools = manager.get_active_tools()
-    
-    # 估算 token 占用（每个工具描述约 50-100 tokens）
-    estimated_tokens = len(tools) * 75
-    
-    return {
-        "active_packages": list(manager.active_packages),
-        "active_package_count": len(manager.active_packages),
-        "active_tools_count": len(tools),
-        "estimated_token_usage": estimated_tokens,
-        "total_packages": len(manager.packages),
-        "warning": "⚠️ 工具数量过多可能影响性能" if len(tools) > 20 else "✅ 工具数量合理",
-        "suggestion": "建议调用 close_all_packages() 关闭不需要的技能包" if len(tools) > 15 else "当前状态良好"
-    }
-
-
-@mcp.tool()
-def get_active_tools() -> Dict[str, Any]:
-    """获取当前激活的所有工具
-    
-    查看当前可以使用的所有工具列表。
-    
-    Returns:
-        工具列表和统计信息
-    """
-    manager = get_package_manager()
-    tools = manager.get_active_tools()
-    
-    return {
-        "tools": [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "parameters": [p.to_dict() for p in tool.parameters]
-            }
-            for tool in tools
-        ],
-        "count": len(tools),
-        "active_packages": list(manager.active_packages),
-        "message": f"当前可用工具数：{len(tools)}"
+        "remaining": list(manager.active_packages)
     }
 
 
 # ============================================================================
-# 动态工具注册
-# ============================================================================
-
-def _register_tool_dynamic(tool: Tool) -> None:
-    """动态注册工具到 FastMCP
-    
-    Args:
-        tool: 要注册的工具
-    """
-    # 创建工具处理器
-    def create_handler(t: Tool):
-        async def handler(**kwargs) -> Dict[str, Any]:
-            try:
-                if t.handler:
-                    result = t.handler(**kwargs)
-                    if asyncio.iscoroutine(result):
-                        result = await result
-                    return {"success": True, "data": result}
-                else:
-                    return {"success": False, "error": "No handler"}
-            except Exception as e:
-                logger.error(f"工具 {t.name} 执行失败：{e}")
-                return {"success": False, "error": str(e)}
-        
-        return handler
-    
-    # 创建工具函数
-    handler = create_handler(tool)
-    handler.__name__ = tool.name
-    handler.__doc__ = tool.description
-    
-    # 注册到 FastMCP
-    # 注意：FastMCP 不支持运行时动态添加工具
-    # 这里我们只是标记为已加载，实际工具在启动时预注册
-    logger.info(f"工具 {tool.name} 已标记为可用")
-
-
-# ============================================================================
-# 资源（可选，用于查看信息）
+# 资源：技能包描述（关键！）
 # ============================================================================
 
 @mcp.resource("skillmcp://packages")
-def list_packages_resource() -> str:
-    """资源：列出所有技能包（文本格式）"""
+def list_all_packages() -> str:
+    """资源：所有可用技能包及其功能描述
+    
+    这个资源会暴露给 AI，让 AI 知道有哪些技能包可用。
+    """
     manager = get_package_manager()
     packages = manager.list_packages()
     
-    lines = ["SkillMCP 技能包列表", "=" * 60]
+    lines = [
+        "╔══════════════════════════════════════════════════════════╗",
+        "║              SkillMCP 可用技能包列表                      ║",
+        "╚══════════════════════════════════════════════════════════╝",
+        ""
+    ]
+    
     for pkg in packages:
-        status = "✓" if pkg.name in manager.active_packages else " "
-        lines.append(f"[{status}] {pkg.name:20} v{pkg.version:10} - {pkg.description}")
-    lines.append("=" * 60)
-    lines.append(f"总计：{len(packages)} 个技能包")
-    lines.append(f"已激活：{len(manager.active_packages)} 个")
-    lines.append("")
-    lines.append("提示：使用 open_package() 打开技能包以使用其中的工具")
+        status = "✓ 已激活" if pkg.name in manager.active_packages else "○ 未激活"
+        lines.append(f"┌─────────────────────────────────────────────────────┐")
+        lines.append(f"│ 📦 {pkg.name.upper():20} {status:15} │")
+        lines.append(f"├─────────────────────────────────────────────────────┤")
+        lines.append(f"│ 描述：{pkg.description:48} │")
+        lines.append(f"│ 分类：{pkg.category:48} │")
+        lines.append(f"│ 工具：{', '.join(pkg.tools) if pkg.tools else '见详情':48} │")
+        lines.append(f"│ 标签：{', '.join(pkg.tags) if pkg.tags else 'N/A':48} │")
+        lines.append(f"├─────────────────────────────────────────────────────┤")
+        
+        if pkg.name not in manager.active_packages:
+            lines.append(f"│ 💡 提示：如需使用此技能包，请调用 open_package    │")
+        else:
+            lines.append(f"│ ✅ 此技能包已激活，可以直接使用其中的工具        │")
+        
+        lines.append(f"└─────────────────────────────────────────────────────┘")
+        lines.append("")
+    
+    lines.append(f"总计：{len(packages)} 个技能包 | 已激活：{len(manager.active_packages)} 个")
     
     return "\n".join(lines)
 
 
-@mcp.resource("skillmcp://packages/{package_name}")
-def get_package_info(package_name: str) -> str:
-    """资源：获取技能包详情
+@mcp.resource("skillmcp://packages/{package_name}/details")
+def get_package_details(package_name: str) -> str:
+    """资源：技能包详细信息
     
     Args:
         package_name: 技能包名称
@@ -386,34 +243,102 @@ def get_package_info(package_name: str) -> str:
     pkg = next((p for p in packages if p.name == package_name), None)
     
     if not pkg:
-        return f"错误：技能包 '{package_name}' 不存在"
+        return f"❌ 技能包 '{package_name}' 不存在\n\n可用技能包：{[p.name for p in packages]}"
     
     lines = [
-        f"技能包：{pkg.name}",
-        f"版本：{pkg.version}",
-        f"描述：{pkg.description}",
-        f"作者：{pkg.author or 'N/A'}",
-        f"分类：{pkg.category}",
-        f"标签：{', '.join(pkg.tags) if pkg.tags else 'N/A'}",
-        f"默认加载：{'是' if pkg.default_visible else '否'}",
-        f"包含工具：{', '.join(pkg.tools) if pkg.tools else 'N/A'}",
-        f"依赖：{', '.join(pkg.dependencies) if pkg.dependencies else '无'}",
-        f"状态：{'✓ 已激活' if pkg.name in manager.active_packages else '○ 未激活'}"
+        f"╔══════════════════════════════════════════════════════════╗",
+        f"║  技能包详情：{pkg.name.upper():42} ║",
+        f"╚══════════════════════════════════════════════════════════╝",
+        "",
+        f"📦 名称：{pkg.name}",
+        f"📌 版本：{pkg.version}",
+        f"📝 描述：{pkg.description}",
+        f"🏷️  分类：{pkg.category}",
+        f"🏷️  标签：{', '.join(pkg.tags) if pkg.tags else 'N/A'}",
+        f"👤 作者：{pkg.author or 'N/A'}",
+        "",
+        f"🔧 包含工具:",
     ]
+    
+    for tool_name in pkg.tools:
+        lines.append(f"   • {tool_name}")
+    
+    if pkg.dependencies:
+        lines.append(f"\n🔗 依赖：{', '.join(pkg.dependencies)}")
+    
+    lines.append(f"\n💡 使用方式:")
+    if pkg.name in manager.active_packages:
+        lines.append(f"   ✅ 已激活，可以直接使用上述工具")
+    else:
+        lines.append(f"   1. 调用 open_package(package_name='{pkg.name}') 打开")
+        lines.append(f"   2. 使用上述工具完成任务")
+        lines.append(f"   3. 调用 close_package(package_name='{pkg.name}') 关闭")
     
     return "\n".join(lines)
 
 
 # ============================================================================
-# 生命周期管理
+# 辅助工具
+# ============================================================================
+
+@mcp.tool()
+def get_package_info(package_name: str) -> Dict[str, Any]:
+    """获取技能包详细信息
+    
+    Args:
+        package_name: 技能包名称
+        
+    Returns:
+        技能包信息
+    """
+    manager = get_package_manager()
+    packages = manager.discover_packages()
+    
+    pkg = next((p for p in packages if p.name == package_name), None)
+    
+    if not pkg:
+        return {
+            "success": False,
+            "error": f"技能包 '{package_name}' 不存在",
+            "available": [p.name for p in packages]
+        }
+    
+    return {
+        "success": True,
+        "package": pkg.to_dict(),
+        "active": pkg.name in manager.active_packages
+    }
+
+
+@mcp.tool()
+def get_usage_stats() -> Dict[str, Any]:
+    """获取使用情况统计
+    
+    Returns:
+        统计信息
+    """
+    manager = get_package_manager()
+    tools = manager.get_active_tools()
+    
+    estimated_tokens = len(tools) * 75
+    
+    return {
+        "active_packages": list(manager.active_packages),
+        "active_package_count": len(manager.active_packages),
+        "active_tools_count": len(tools),
+        "estimated_token_usage": estimated_tokens,
+        "total_packages": len(manager.packages),
+        "warning": "⚠️ 工具数量过多可能影响性能" if len(tools) > 20 else "✅ 工具数量合理",
+        "suggestion": "建议调用 close_all_packages() 清理" if len(tools) > 15 else "当前状态良好"
+    }
+
+
+# ============================================================================
+# 初始化
 # ============================================================================
 
 def initialize_server() -> ToolPackageManager:
-    """初始化服务器
-    
-    Returns:
-        工具包管理器实例
-    """
+    """初始化服务器"""
     global _package_manager
     
     if _package_manager is None:
@@ -426,7 +351,6 @@ def initialize_server() -> ToolPackageManager:
                 _package_manager.activate_package(pkg_name)
                 logger.info(f"自动加载默认技能包：{pkg_name}")
                 
-                # 预加载工具
                 pkg_module = _package_manager.loaded_packages.get(pkg_name)
                 if pkg_module and hasattr(pkg_module, "get_tools"):
                     tools = pkg_module.get_tools()
@@ -435,11 +359,9 @@ def initialize_server() -> ToolPackageManager:
                         _package_open_times[pkg_name] = time.time()
         
         logger.info(f"SkillMCP 初始化完成，已加载 {len(_package_manager.active_packages)} 个技能包")
-        logger.info(f"可用工具：{list(_loaded_tools.keys())}")
     
     return _package_manager
 
 
 if __name__ == "__main__":
-    # 运行 FastMCP 服务器
     mcp.run()
