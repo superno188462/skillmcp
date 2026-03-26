@@ -165,14 +165,16 @@ class ToolPackageManager:
             # 导入工具包模块
             module = importlib.import_module(f"packages.{package_name}")
             
-            # 获取工具函数
+            # 获取工具函数（可选）
             if hasattr(module, "get_tools"):
                 self.loaded_packages[package_name] = module
                 logger.info(f"工具包已加载：{package_name}")
                 return module
             else:
-                logger.error(f"工具包 {package_name} 缺少 get_tools 函数")
-                return None
+                # 没有 get_tools 函数也可以，工具在 server.py 中定义
+                self.loaded_packages[package_name] = module
+                logger.info(f"工具包已加载：{package_name} (无 get_tools 函数)")
+                return module
         except Exception as e:
             logger.error(f"加载工具包 {package_name} 失败：{e}")
             return None
@@ -234,7 +236,7 @@ class ToolPackageManager:
         
         return tools
     
-    def list_packages(self) -> List[PackageInfo]:
+    def list_packages(self) -> List[SkillPackage]:
         """列出所有可用工具包
         
         Returns:

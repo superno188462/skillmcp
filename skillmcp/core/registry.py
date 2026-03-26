@@ -103,7 +103,7 @@ class SkillRegistry:
         self.skills[skill_info.name] = skill_info
         logger.info(f"技能已注册：{skill_info.name}")
     
-    def load(self, skill_name: str) -> Optional[Skill]:
+    async def load(self, skill_name: str) -> Optional[Skill]:
         """加载技能
         
         Args:

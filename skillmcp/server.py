@@ -15,6 +15,7 @@ from typing import Dict, List, Any, Optional
 import asyncio
 from loguru import logger
 from dataclasses import dataclass
+import time
 
 from skillmcp.core.package_manager import ToolPackageManager
 from skillmcp.core.interfaces import SkillPackage, Tool
@@ -407,36 +408,36 @@ def get_package_info(package_name: str) -> str:
 # 生命周期管理
 # ============================================================================
 
-@mcp.lifecycle("startup")
-async def startup():
-    """FastMCP 启动时执行"""
-    global _package_manager
-    _package_manager = ToolPackageManager()
-    _package_manager.discover_packages()
+def initialize_server() -> ToolPackageManager:
+    """初始化服务器
     
-    # 自动加载默认可见的技能包
-    for pkg_name, pkg_info in _package_manager.packages.items():
-        if _package_manager._get_package_default_visibility(pkg_name):
-            _package_manager.activate_package(pkg_name)
-            logger.info(f"自动加载默认技能包：{pkg_name}")
-            
-            # 预加载工具
-            pkg_module = _package_manager.loaded_packages.get(pkg_name)
-            if pkg_module and hasattr(pkg_module, "get_tools"):
-                tools = pkg_module.get_tools()
-                for tool in tools:
-                    _loaded_tools[tool.name] = True
-    
-    logger.info(f"SkillMCP 启动完成，已加载 {len(_package_manager.active_packages)} 个技能包")
-    logger.info(f"可用工具：{list(_loaded_tools.keys())}")
-
-
-@mcp.lifecycle("shutdown")
-async def shutdown():
-    """FastMCP 关闭时执行"""
+    Returns:
+        工具包管理器实例
+    """
     global _package_manager
-    if _package_manager:
-        logger.info("SkillMCP 已关闭")
+    
+    if _package_manager is None:
+        _package_manager = ToolPackageManager()
+        _package_manager.discover_packages()
+        
+        # 自动加载默认可见的技能包
+        for pkg_name, pkg_info in _package_manager.packages.items():
+            if _package_manager._get_package_default_visibility(pkg_name):
+                _package_manager.activate_package(pkg_name)
+                logger.info(f"自动加载默认技能包：{pkg_name}")
+                
+                # 预加载工具
+                pkg_module = _package_manager.loaded_packages.get(pkg_name)
+                if pkg_module and hasattr(pkg_module, "get_tools"):
+                    tools = pkg_module.get_tools()
+                    for tool in tools:
+                        _loaded_tools[tool.name] = True
+                        _package_open_times[pkg_name] = time.time()
+        
+        logger.info(f"SkillMCP 初始化完成，已加载 {len(_package_manager.active_packages)} 个技能包")
+        logger.info(f"可用工具：{list(_loaded_tools.keys())}")
+    
+    return _package_manager
 
 
 if __name__ == "__main__":
