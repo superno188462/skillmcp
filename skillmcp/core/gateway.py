@@ -80,8 +80,12 @@ class SkillMCPGateway:
             ),
         ]
     
-    async def initialize(self) -> None:
-        """初始化网关"""
+    async def initialize(self, auto_load_defaults: bool = True) -> None:
+        """初始化网关
+        
+        Args:
+            auto_load_defaults: 是否自动加载默认可见的工具包
+        """
         logger.info("初始化 SkillMCP Gateway...")
         
         # 发现工具包
@@ -90,10 +94,12 @@ class SkillMCPGateway:
         # 发现技能
         self.registry.discover_skills()
         
-        # 加载核心工具包（默认）
-        if "core" in self.package_manager.packages:
-            await self.open_package("core")
-            logger.info("核心工具包已加载")
+        # 加载默认可见的工具包
+        if auto_load_defaults:
+            for pkg_name, pkg_info in self.package_manager.packages.items():
+                if self.package_manager._get_package_default_visibility(pkg_name):
+                    await self.open_package(pkg_name)
+                    logger.info(f"自动加载默认工具包：{pkg_name}")
         
         logger.info("SkillMCP Gateway 初始化完成")
     

@@ -131,15 +131,66 @@ class Skill(ABC):
 
 
 @dataclass
-class PackageInfo:
-    """工具包元数据"""
+class SkillPackage:
+    """技能包（工具包）元数据
+    
+    技能包是 SkillMCP 的基本单位，每个技能包包含一组相关的工具。
+    通过配置控制是否默认加载。
+    """
     name: str
     version: str
     description: str = ""
     author: str = ""
     tools: List[str] = field(default_factory=list)
     dependencies: List[str] = field(default_factory=list)
-    auto_load: bool = False
+    default_visible: bool = False  # 是否默认显示/加载
+    category: str = "general"  # 分类：general, web, data, system 等
+    tags: List[str] = field(default_factory=list)  # 标签
+    
+    @classmethod
+    def from_dict(cls, data: Dict) -> "SkillPackage":
+        """从字典创建 SkillPackage"""
+        return cls(
+            name=data.get("name", "unknown"),
+            version=data.get("version", "0.1.0"),
+            description=data.get("description", ""),
+            author=data.get("author", ""),
+            tools=data.get("tools", []),
+            dependencies=data.get("dependencies", []),
+            default_visible=data.get("default_visible", False),
+            category=data.get("category", "general"),
+            tags=data.get("tags", []),
+        )
+    
+    def to_dict(self) -> Dict:
+        """转换为字典格式"""
+        return {
+            "name": self.name,
+            "version": self.version,
+            "description": self.description,
+            "author": self.author,
+            "tools": self.tools,
+            "dependencies": self.dependencies,
+            "default_visible": self.default_visible,
+            "category": self.category,
+            "tags": self.tags,
+        }
+
+
+@dataclass
+class PackageInfo:
+    """工具包元数据（别名，兼容旧代码）
+    
+    .. deprecated:: 0.1.0
+        使用 :class:`SkillPackage` 代替
+    """
+    name: str
+    version: str
+    description: str = ""
+    author: str = ""
+    tools: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+    auto_load: bool = False  # 已废弃，使用 default_visible
     
     @classmethod
     def from_dict(cls, data: Dict) -> "PackageInfo":
@@ -151,7 +202,7 @@ class PackageInfo:
             author=data.get("author", ""),
             tools=data.get("tools", []),
             dependencies=data.get("dependencies", []),
-            auto_load=data.get("auto_load", False),
+            auto_load=data.get("auto_load", False) or data.get("default_visible", False),
         )
 
 

@@ -1,35 +1,79 @@
 """
 工具包管理器
 
-负责发现、加载、管理工具包。
+负责发现、加载、管理技能包（工具包）。
 """
 
 import importlib
+import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from loguru import logger
 
-from skillmcp.core.interfaces import PackageInfo, Tool
+from skillmcp.core.interfaces import SkillPackage, Tool
 
 
 class ToolPackageManager:
     """工具包管理器"""
     
-    def __init__(self, package_dir: Optional[str] = None):
+    def __init__(self, package_dir: Optional[str] = None, config_file: Optional[str] = None):
         """初始化工具包管理器
         
         Args:
             package_dir: 工具包目录路径，默认为 packages/
+            config_file: 配置文件路径，用于控制默认加载行为
         """
         self.package_dir = Path(package_dir) if package_dir else Path("packages")
-        self.packages: Dict[str, PackageInfo] = {}  # package_name -> PackageInfo
+        self.config_file = Path(config_file) if config_file else Path("skillmcp.json")
+        self.packages: Dict[str, SkillPackage] = {}  # package_name -> SkillPackage
         self.loaded_packages: Dict[str, object] = {}  # package_name -> package_instance
-        self.active_packages: set = set()  # 已激活的工具包名称
+        self.active_packages: Set[str] = set()  # 已激活的工具包名称
+        self.config: Dict = {}  # 配置
         
         # 确保工具包目录存在
         self.package_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 加载配置
+        self._load_config()
     
-    def discover_packages(self) -> List[PackageInfo]:
+    def _load_config(self) -> None:
+        """加载配置文件"""
+        if self.config_file.exists():
+            try:
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    self.config = json.load(f)
+                logger.info(f"已加载配置文件：{self.config_file}")
+            except Exception as e:
+                logger.warning(f"加载配置文件失败：{e}，使用默认配置")
+                self.config = {}
+        else:
+            self.config = {}
+    
+    def _get_package_default_visibility(self, package_name: str) -> bool:
+        """获取工具包的默认可见性
+        
+        优先级：配置文件 > 包元数据 > 默认值
+        
+        Args:
+            package_name: 工具包名称
+            
+        Returns:
+            是否默认显示/加载
+        """
+        # 1. 检查配置文件
+        if "packages" in self.config:
+            pkg_config = self.config["packages"].get(package_name, {})
+            if "default_visible" in pkg_config:
+                return pkg_config["default_visible"]
+        
+        # 2. 使用包元数据中的值
+        if package_name in self.packages:
+            return self.packages[package_name].default_visible
+        
+        # 3. 默认不显示
+        return False
+    
+    def discover_packages(self) -> List[SkillPackage]:
         """发现所有可用的工具包
         
         Returns:
@@ -48,13 +92,18 @@ class ToolPackageManager:
                     if pkg_info:
                         packages.append(pkg_info)
                         self.packages[pkg_info.name] = pkg_info
-                        logger.info(f"发现工具包：{pkg_info.name} v{pkg_info.version}")
+                        
+                        # 检查是否默认加载
+                        if self._get_package_default_visibility(pkg_info.name):
+                            logger.info(f"发现工具包：{pkg_info.name} v{pkg_info.version} (默认加载)")
+                        else:
+                            logger.info(f"发现工具包：{pkg_info.name} v{pkg_info.version}")
                 except Exception as e:
                     logger.error(f"加载工具包 {pkg_path.name} 失败：{e}")
         
         return packages
     
-    def _load_package_info(self, pkg_path: Path) -> Optional[PackageInfo]:
+    def _load_package_info(self, pkg_path: Path) -> Optional[SkillPackage]:
         """加载工具包元数据
         
         Args:
@@ -68,15 +117,28 @@ class ToolPackageManager:
             module_name = f"{pkg_path.parent.name}.{pkg_path.name}"
             module = importlib.import_module(module_name)
             
-            # 获取 PACKAGE_INFO
-            if hasattr(module, "PACKAGE_INFO"):
-                return PackageInfo.from_dict(module.PACKAGE_INFO)
+            # 获取 PACKAGE_INFO 或 SKILL_PACKAGE
+            if hasattr(module, "SKILL_PACKAGE"):
+                return SkillPackage.from_dict(module.SKILL_PACKAGE)
+            elif hasattr(module, "PACKAGE_INFO"):
+                # 兼容旧格式
+                old_info = PackageInfo.from_dict(module.PACKAGE_INFO)
+                return SkillPackage(
+                    name=old_info.name,
+                    version=old_info.version,
+                    description=old_info.description,
+                    author=old_info.author,
+                    tools=old_info.tools,
+                    dependencies=old_info.dependencies,
+                    default_visible=old_info.auto_load,
+                )
             else:
                 # 使用默认信息
-                return PackageInfo(
+                return SkillPackage(
                     name=pkg_path.name,
                     version="0.1.0",
                     description=f"工具包：{pkg_path.name}",
+                    default_visible=False,
                 )
         except Exception as e:
             logger.error(f"加载工具包信息失败 {pkg_path}: {e}")

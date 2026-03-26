@@ -10,7 +10,7 @@ __author__ = "superno188462"
 from skillmcp.core.gateway import SkillMCPGateway
 from skillmcp.core.registry import SkillRegistry
 from skillmcp.core.package_manager import ToolPackageManager
-from skillmcp.core.interfaces import Skill, Tool, ToolParameter
+from skillmcp.core.interfaces import Skill, Tool, ToolParameter, SkillPackage
 
 __all__ = [
     "SkillMCPGateway",
@@ -19,4 +19,5 @@ __all__ = [
     "Skill",
     "Tool",
     "ToolParameter",
+    "SkillPackage",
 ]

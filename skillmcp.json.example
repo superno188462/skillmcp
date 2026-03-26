@@ -1,0 +1,27 @@
+{
+  "name": "SkillMCP 配置",
+  "version": "1.0.0",
+  
+  "packages": {
+    "core": {
+      "default_visible": true,
+      "description": "核心工具包，始终可用"
+    },
+    "web": {
+      "default_visible": false,
+      "description": "Web 工具包，按需加载"
+    }
+  },
+  
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "log_level": "INFO"
+  },
+  
+  "features": {
+    "auto_load_defaults": true,
+    "allow_dynamic_load": true,
+    "tool_timeout": 30
+  }
+}
