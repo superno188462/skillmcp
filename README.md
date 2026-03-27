@@ -141,7 +141,29 @@ AI（可选）：web_tool(enable=False)
 open_package(package_name="web")
 ```
 
-## 🔧 开发自定义技能包
+## 🔧 工作原理
+
+### 工具列表变化通知
+
+SkillMCP 使用 **FastMCP v3 LocalProvider** 的自动通知机制：
+
+```
+1. 启用技能包 → provider.tool() 注册子工具
+   ↓
+2. LocalProvider 自动发送 tools/list_changed 通知
+   ↓
+3. MCP 客户端收到通知
+   ↓
+4. 客户端自动刷新工具列表
+   ↓
+5. 新工具立即可用（无需重新连接！）
+```
+
+**关键特性**：
+- ✅ 自动通知，无需手动调用
+- ✅ 客户端自动刷新
+- ✅ 无需重新连接 MCP 服务器
+- ✅ FastMCP v3 内置支持
 
 ### 1. 创建技能包目录
 
