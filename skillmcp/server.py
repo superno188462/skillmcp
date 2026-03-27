@@ -260,24 +260,21 @@ def list_packages_resource() -> str:
 
 
 # ============================================================================
-# 初始化
+# 初始化（模块加载时立即执行）
 # ============================================================================
 
-def initialize_server() -> ToolPackageManager:
-    """初始化服务器"""
-    manager = get_package_manager()
-    
-    # 为每个技能包创建控制工具
-    for pkg_name, pkg_info in manager.packages.items():
-        create_package_tool(pkg_name, pkg_info.to_dict() if hasattr(pkg_info, 'to_dict') else pkg_info.__dict__)
-    
-    logger.info(f"SkillMCP 初始化完成 (FastMCP {__import__('fastmcp').__version__})")
-    logger.info(f"发现 {len(manager.packages)} 个技能包")
-    logger.info(f"注册技能包工具：{[f'{p}_tool' for p in manager.packages.keys()]}")
-    
-    return manager
+# 在模块加载时立即初始化，确保工具被注册
+logger.info("SkillMCP 模块加载，开始初始化...")
+_package_manager = get_package_manager()
+
+# 为每个技能包创建控制工具
+for pkg_name, pkg_info in _package_manager.packages.items():
+    create_package_tool(pkg_name, pkg_info.to_dict() if hasattr(pkg_info, 'to_dict') else pkg_info.__dict__)
+
+logger.info(f"SkillMCP 初始化完成 (FastMCP {__import__('fastmcp').__version__})")
+logger.info(f"发现 {len(_package_manager.packages)} 个技能包")
+logger.info(f"注册技能包工具：{[f'{p}_tool' for p in _package_manager.packages.keys()]}")
 
 
 if __name__ == "__main__":
-    initialize_server()
     mcp.run()
