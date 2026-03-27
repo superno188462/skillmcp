@@ -133,9 +133,8 @@ def http_delete_handler(url: str, headers: Optional[Dict[str, Any]] = None) -> D
 SKILL_PACKAGE = {
     "name": "web",
     "version": "1.0.0",
-    "description": "Web 工具包 - 提供 HTTP 请求、Webhook 等工具",
+    "description": "Web 工具包 - 提供 HTTP 请求、Webhook 等网络相关工具",
     "author": "SkillMCP Team",
-    "tools": ["http_get", "http_post", "http_put", "http_delete"],
     "dependencies": [],
     "default_visible": False,
     "category": "network",

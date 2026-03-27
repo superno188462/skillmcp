@@ -65,10 +65,10 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
     
     # 创建技能包控制工具
     tool_name = f"{package_name}_tool"
-    tool_desc = f"{package_info['description']}（启用后提供：{', '.join(package_info.get('tools', []))}）"
+    tool_desc = f"{package_info['description']}"
     
     # 动态创建工具函数
-    def make_package_tool(pkg_name: str, pkg_desc: str, pkg_tools: list):
+    def make_package_tool(pkg_name: str, pkg_desc: str):
         async def package_tool(enable: bool) -> Dict[str, Any]:
             """技能包控制工具
             
@@ -83,8 +83,7 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                     return {
                         "success": True,
                         "message": f"技能包 '{pkg_name}' 已启用",
-                        "already_active": True,
-                        "sub_tools": pkg_tools
+                        "already_active": True
                     }
                 
                 # 加载并注册子工具
@@ -188,7 +187,6 @@ async def sub_handler({params_str}):
                     "success": True,
                     "message": f"✅ 技能包 '{pkg_name}' 已启用，注册了 {sub_tools_registered} 个子工具",
                     "sub_tools_registered": sub_tools_registered,
-                    "sub_tools": sub_tool_names,
                     "note": "🎉 子工具已立即可用！"
                 }
             
@@ -225,7 +223,7 @@ async def sub_handler({params_str}):
         return package_tool
     
     # 创建工具
-    package_tool_fn = make_package_tool(package_name, tool_desc, package_info.get('tools', []))
+    package_tool_fn = make_package_tool(package_name, tool_desc)
     package_tool_fn.__name__ = tool_name
     package_tool_fn.__doc__ = tool_desc
     
@@ -249,12 +247,10 @@ def list_packages_resource() -> str:
         status = "✓ 已启用" if pkg.name in _active_packages else "○ 未启用"
         tool_name = f"{pkg.name}_tool"
         lines.append(f"[{status}] {tool_name:20} - {pkg.description}")
-        lines.append(f"       子工具：{', '.join(pkg.tools)}")
         lines.append(f"       使用：调用 {tool_name}(enable=True) 启用")
     lines.append("=" * 60)
     lines.append(f"总计：{len(packages)} 个技能包")
     lines.append(f"已启用：{len(_active_packages)} 个")
-    lines.append(f"已注册子工具：{sum(len(tools) for tools in _package_tools.values())} 个")
     
     return "\n".join(lines)
 
