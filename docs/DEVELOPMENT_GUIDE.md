@@ -88,13 +88,27 @@ SKILL_PACKAGE = {
 }
 ```
 
+### 可选字段
+
+```python
+SKILL_PACKAGE = {
+    "name": "my_skill",
+    "version": "1.0.0",
+    "description": "技能包描述",
+    "author": "Your Name",
+    
+    # 是否默认启用（默认：False）
+    "default_enabled": True,  # 设置为 True 则启动时自动启用
+}
+```
+
 ### 就这么简单！
 
 不需要：
 - ❌ `tools` 列表（自动从 `get_tools()` 获取）
 - ❌ `exposure` 配置（使用 description）
-- ❌ `category`、`tags`（可选，暂不需要）
-- ❌ `dependencies`（可选，暂不需要）
+- ❌ `category`、`tags`（不需要）
+- ❌ `dependencies`（不需要）
 
 ---
 

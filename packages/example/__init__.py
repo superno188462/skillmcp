@@ -12,6 +12,10 @@ SKILL_PACKAGE = {
     "version": "1.0.0",
     "description": "示例技能包 - 提供数据处理和转换工具",
     "author": "Your Name",
+    
+    # 可选：是否默认启用（默认：False）
+    # 设置为 True 则服务器启动时自动启用此技能包
+    "default_enabled": False,
 }
 
 

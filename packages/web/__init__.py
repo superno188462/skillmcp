@@ -135,8 +135,7 @@ SKILL_PACKAGE = {
     "version": "1.0.0",
     "description": "Web 工具包 - 提供 HTTP 请求、Webhook 等网络相关工具",
     "author": "SkillMCP Team",
-    "dependencies": [],
-    "default_visible": False,
-    "category": "network",
-    "tags": ["http", "web", "network", "api"],
+    
+    # 默认启用（服务器启动时自动启用）
+    "default_enabled": True,
 }

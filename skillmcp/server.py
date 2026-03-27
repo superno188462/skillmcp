@@ -266,8 +266,113 @@ _package_manager = get_package_manager()
 for pkg_name, pkg_info in _package_manager.packages.items():
     create_package_tool(pkg_name, pkg_info.to_dict() if hasattr(pkg_info, 'to_dict') else pkg_info.__dict__)
 
+# 自动启用标记为 default_enabled 的技能包
+for pkg_name, pkg_info in _package_manager.packages.items():
+    # 获取技能包配置字典
+    if hasattr(pkg_info, 'to_dict'):
+        pkg_dict = pkg_info.to_dict()
+    elif hasattr(pkg_info, '__dict__'):
+        pkg_dict = pkg_info.__dict__
+    else:
+        pkg_dict = pkg_info
+    
+    # 检查是否默认启用
+    if pkg_dict.get('default_enabled', False):
+        logger.info(f"自动启用技能包：{pkg_name}")
+        # 加载技能包
+        if _package_manager.load_package(pkg_name):
+            _active_packages.add(pkg_name)
+            # 注册子工具
+            pkg_module = _package_manager.loaded_packages[pkg_name]
+            if hasattr(pkg_module, "get_tools"):
+                skill_tools = pkg_module.get_tools()
+                sub_tool_names = []
+                
+                for tool in skill_tools:
+                    try:
+                        tool_name = tool.name
+                        tool_desc = tool.description if hasattr(tool, 'description') else ''
+                        tool_handler = tool.handler if hasattr(tool, 'handler') else None
+                        tool_params = tool.parameters if hasattr(tool, 'parameters') and tool.parameters else []
+                        
+                        # 构建参数字符串
+                        param_strs = []
+                        for param in tool_params:
+                            param_name = param.name
+                            param_type = param.type if hasattr(param, 'type') else 'Any'
+                            if param_type == 'object':
+                                param_type = 'Dict[str, Any]'
+                            elif param_type == 'string':
+                                param_type = 'str'
+                            elif param_type == 'number':
+                                param_type = 'float'
+                            elif param_type == 'integer':
+                                param_type = 'int'
+                            elif param_type == 'boolean':
+                                param_type = 'bool'
+                            else:
+                                param_type = 'Any'
+                            
+                            if hasattr(param, 'required') and param.required:
+                                param_strs.append(f"{param_name}: {param_type}")
+                            else:
+                                param_strs.append(f"{param_name}: Optional[{param_type}] = None")
+                        
+                        params_str = ", ".join(param_strs)
+                        
+                        # 动态创建子工具函数
+                        if tool_handler:
+                            func_code = f"""
+async def sub_handler({params_str}):
+    try:
+        kwargs = {{}}
+        for name, value in locals().items():
+            if name != 'self':
+                kwargs[name] = value
+        result = tool_handler(**kwargs)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return {{"success": True, "data": result}}
+    except Exception as e:
+        logger.error(f"工具执行失败：{{e}}")
+        return {{"success": False, "error": str(e)}}
+"""
+                        else:
+                            func_code = f"""
+async def sub_handler({params_str}):
+    return {{"success": False, "error": "No handler"}}
+"""
+                        
+                        local_ns = {
+                            'asyncio': asyncio,
+                            'logger': logger,
+                            'tool_handler': tool_handler,
+                            'Optional': Optional,
+                            'Dict': Dict,
+                            'Any': Any
+                        }
+                        exec(func_code, {}, local_ns)
+                        sub_handler = local_ns['sub_handler']
+                        
+                        # 设置函数属性
+                        sub_handler.__name__ = tool_name
+                        sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                        
+                        # 注册子工具
+                        provider.tool()(sub_handler)
+                        sub_tool_names.append(tool_name)
+                        
+                        logger.info(f"自动注册子工具：{tool_name} (来自 {pkg_name})")
+                        
+                    except Exception as e:
+                        logger.error(f"自动注册子工具失败：{e}")
+                
+                _package_tools[pkg_name] = sub_tool_names
+                logger.info(f"技能包 {pkg_name} 已自动启用，注册了 {len(sub_tool_names)} 个子工具")
+
 logger.info(f"SkillMCP 初始化完成 (FastMCP {__import__('fastmcp').__version__})")
 logger.info(f"发现 {len(_package_manager.packages)} 个技能包")
+logger.info(f"已启用技能包：{list(_active_packages)}")
 logger.info(f"注册技能包工具：{[f'{p}_tool' for p in _package_manager.packages.keys()]}")
 
 
