@@ -65,7 +65,10 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
     
     # 创建技能包控制工具
     tool_name = f"{package_name}_tool"
-    tool_desc = f"{package_info['description']}"
+    
+    # 获取自定义暴露信息
+    exposure = package_info.get('exposure', {})
+    tool_desc = exposure.get('initial_description', package_info.get('description', ''))
     
     # 动态创建工具函数
     def make_package_tool(pkg_name: str, pkg_desc: str):
@@ -229,7 +232,7 @@ async def sub_handler({params_str}):
     
     # 注册到 Provider
     provider.tool()(package_tool_fn)
-    logger.info(f"注册技能包工具：{tool_name}")
+    logger.info(f"注册技能包工具：{tool_name} - {tool_desc}")
 
 
 # ============================================================================
