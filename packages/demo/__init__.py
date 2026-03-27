@@ -9,7 +9,7 @@
 """
 
 from skillmcp.core.interfaces import Tool, ToolParameter
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 
 SKILL_PACKAGE = {
@@ -51,6 +51,15 @@ def get_tools():
             ],
             handler=http_post_handler
         ),
+        Tool(
+            name="process_list",
+            description="处理列表 - 展示如何接收列表参数",
+            parameters=[
+                ToolParameter(name="items", type="array", description="要处理的列表", required=True),
+                ToolParameter(name="operation", type="string", description="操作类型 (sum, count, filter)", required=False),
+            ],
+            handler=process_list_handler
+        ),
     ]
 
 
@@ -78,6 +87,36 @@ def http_post_handler(url: str, data: Optional[Dict[str, Any]] = None) -> Dict[s
             "status": 201,
             "data": data,
             "body": "示例响应数据"
+        }
+    }
+
+
+def process_list_handler(items: List[Any], operation: Optional[str] = "sum") -> Dict[str, Any]:
+    """处理列表工具实现
+    
+    Args:
+        items: 列表参数
+        operation: 操作类型
+    """
+    if operation == "sum":
+        # 求和（仅数字）
+        numbers = [x for x in items if isinstance(x, (int, float))]
+        result = sum(numbers)
+    elif operation == "count":
+        # 计数
+        result = len(items)
+    elif operation == "filter":
+        # 过滤非空值
+        result = [x for x in items if x is not None]
+    else:
+        result = items
+    
+    return {
+        "success": True,
+        "data": {
+            "input": items,
+            "operation": operation,
+            "result": result
         }
     }
 

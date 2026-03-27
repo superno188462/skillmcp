@@ -112,23 +112,32 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             for param in tool_params:
                                 param_name = param.name
                                 param_type = param.type if hasattr(param, 'type') else 'Any'
-                                if param_type == 'object':
-                                    param_type = 'Dict[str, Any]'
-                                elif param_type == 'string':
-                                    param_type = 'str'
-                                elif param_type == 'number':
-                                    param_type = 'float'
-                                elif param_type == 'integer':
-                                    param_type = 'int'
-                                elif param_type == 'boolean':
-                                    param_type = 'bool'
+                                
+                                # 处理类型映射
+                                if isinstance(param_type, str):
+                                    type_str = param_type
                                 else:
-                                    param_type = 'Any'
+                                    type_str = param_type.value if hasattr(param_type, 'value') else str(param_type)
+                                
+                                if type_str == 'object':
+                                    param_type_str = 'Dict[str, Any]'
+                                elif type_str == 'array':
+                                    param_type_str = 'List[Any]'
+                                elif type_str == 'string':
+                                    param_type_str = 'str'
+                                elif type_str == 'number':
+                                    param_type_str = 'float'
+                                elif type_str == 'integer':
+                                    param_type_str = 'int'
+                                elif type_str == 'boolean':
+                                    param_type_str = 'bool'
+                                else:
+                                    param_type_str = 'Any'
                                 
                                 if hasattr(param, 'required') and param.required:
-                                    param_strs.append(f"{param_name}: {param_type}")
+                                    param_strs.append(f"{param_name}: {param_type_str}")
                                 else:
-                                    param_strs.append(f"{param_name}: Optional[{param_type}] = None")
+                                    param_strs.append(f"{param_name}: Optional[{param_type_str}] = None")
                             
                             params_str = ", ".join(param_strs)
                             
@@ -359,12 +368,14 @@ async def sub_handler({params_str}):
     return {{"success": False, "error": "No handler"}}
 """
                         
+                        # 创建执行环境
                         local_ns = {
                             'asyncio': asyncio,
                             'logger': logger,
                             'tool_handler': tool_handler,
                             'Optional': Optional,
                             'Dict': Dict,
+                            'List': List,
                             'Any': Any
                         }
                         exec(func_code, {}, local_ns)

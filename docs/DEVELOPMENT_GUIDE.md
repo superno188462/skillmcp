@@ -181,6 +181,45 @@ Tool(
 | `integer` | `int` | `42` |
 | `boolean` | `bool` | `True` |
 | `object` | `Dict[str, Any]` | `{"key": "value"}` |
+| `array` | `List[Any]` | `[1, 2, 3]` |
+
+### 使用列表参数
+
+```python
+Tool(
+    name="process_list",
+    description="处理列表",
+    parameters=[
+        ToolParameter(
+            name="items",
+            type="array",        # 列表类型
+            description="要处理的列表",
+            required=True
+        ),
+        ToolParameter(
+            name="operation",
+            type="string",
+            description="操作类型",
+            required=False
+        ),
+    ],
+    handler=process_list_handler
+)
+
+
+def process_list_handler(items: List[Any], operation: Optional[str] = "sum") -> Dict[str, Any]:
+    """处理列表
+    
+    Args:
+        items: 列表参数
+        operation: 操作类型
+    """
+    result = sum(x for x in items if isinstance(x, (int, float)))
+    return {
+        "success": True,
+        "data": {"result": result}
+    }
+```
 
 ### 工具实现
 
