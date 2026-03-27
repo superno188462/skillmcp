@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SkillMCP 自测脚本 - FastMCP v3 Provider 系统版本
+SkillMCP 自测脚本 - 技能包即工具设计
 
 测试完整的技能包加载流程。
 """
@@ -12,16 +12,7 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from skillmcp.server import (
-    mcp, 
-    initialize_server, 
-    provider,
-    _active_packages,
-    _package_tools,
-    open_package,
-    close_package,
-    list_packages,
-)
+from skillmcp.server import provider, _active_packages, _package_tools
 
 
 def print_section(title: str):
@@ -32,117 +23,175 @@ def print_section(title: str):
 
 
 async def test_initialization():
-    """测试 1: 服务器初始化"""
-    print_section("测试 1: 服务器初始化")
-    
-    manager = initialize_server()
-    
-    assert manager is not None, "管理器初始化失败"
-    assert len(manager.packages) > 0, "没有发现任何技能包"
-    assert len(_active_packages) == 0, "初始状态应该没有激活的技能包"
+    """测试 1: 模块加载和初始化"""
+    print_section("测试 1: 模块加载和初始化")
     
     # 检查初始工具
     initial_tools = await provider.list_tools()
-    assert len(initial_tools) == 3, f"初始应该有 3 个工具，实际有 {len(initial_tools)} 个"
     
-    print(f"✅ 发现 {len(manager.packages)} 个技能包")
-    print(f"✅ 已激活：{_active_packages}（初始为空）")
+    assert len(initial_tools) > 0, "初始应该有技能包工具"
+    assert len(_active_packages) == 0, "初始状态应该没有激活的技能包"
+    
+    print(f"✅ 模块加载时自动初始化")
     print(f"✅ 初始工具数：{len(initial_tools)}")
     for tool in initial_tools:
         print(f"   - {tool.name}")
+    
+    # 验证工具命名
+    for tool in initial_tools:
+        assert tool.name.endswith("_tool"), f"工具名称应该以 _tool 结尾：{tool.name}"
+    print(f"✅ 工具命名规范：技能包名_tool")
 
 
-async def test_list_packages():
-    """测试 2: 列出技能包"""
-    print_section("测试 2: 列出技能包")
+async def test_web_tool():
+    """测试 2: web_tool 工具"""
+    print_section("测试 2: web_tool 工具")
     
-    result = list_packages()
+    # 获取 web_tool
+    web_tool = await provider.get_tool('web_tool')
     
-    assert result["total_count"] > 0, "列出技能包失败"
-    print(f"✅ 总技能包数：{result['total_count']}")
-    print(f"✅ 已激活：{result['active_count']}")
+    assert web_tool is not None, "web_tool 应该存在"
+    print(f"✅ web_tool 存在")
+    print(f"   描述：{web_tool.description[:80]}...")
     
-    for pkg in result.get("packages", []):
-        status = "✓" if pkg["active"] else "○"
-        print(f"   [{status}] {pkg['name']:20} - {pkg['description'][:50]}")
+    # 检查参数
+    params = web_tool.parameters
+    print(f"   参数：{params}")
+    assert 'properties' in params, "工具应该有参数定义"
+    assert 'enable' in params['properties'], "web_tool 应该有 enable 参数"
+    print(f"✅ enable 参数存在")
 
 
-async def test_open_package():
-    """测试 3: 打开技能包"""
-    print_section("测试 3: 打开技能包")
+async def test_enable_package():
+    """测试 3: 启用技能包"""
+    print_section("测试 3: 启用技能包")
     
-    # 打开 web 技能包
-    result = open_package(package_name="web")
+    # 获取 web_tool
+    web_tool = await provider.get_tool('web_tool')
     
-    assert result["success"], f"打开技能包失败：{result.get('error')}"
-    print(f"✅ {result['message']}")
+    # 启用技能包
+    result = await web_tool.fn(enable=True)
     
-    # 检查工具是否注册
+    print(f"启用结果：{result}")
+    assert result['success'], f"启用失败：{result.get('error')}"
+    assert result.get('sub_tools_registered', 0) > 0, "应该注册了子工具"
+    
+    print(f"✅ 技能包启用成功")
+    print(f"✅ 注册了 {result['sub_tools_registered']} 个子工具")
+    print(f"   子工具：{result.get('sub_tools', [])}")
+    
+    # 检查工具列表
     all_tools = await provider.list_tools()
     print(f"✅ 当前工具数：{len(all_tools)}")
-    print(f"✅ 已注册的技能包工具：{_package_tools}")
+    
+    # 验证子工具已注册
+    tool_names = [t.name for t in all_tools]
+    assert 'http_get' in tool_names, "http_get 应该已注册"
+    assert 'http_post' in tool_names, "http_post 应该已注册"
+    print(f"✅ 子工具已正确注册")
 
 
-async def test_close_package():
-    """测试 4: 关闭技能包"""
-    print_section("测试 4: 关闭技能包")
+async def test_disable_package():
+    """测试 4: 禁用技能包"""
+    print_section("测试 4: 禁用技能包")
     
-    # 先打开
-    open_package(package_name="web")
+    # 先启用
+    web_tool = await provider.get_tool('web_tool')
+    await web_tool.fn(enable=True)
     
-    # 再关闭
-    result = close_package(package_name="web")
+    # 再禁用
+    result = await web_tool.fn(enable=False)
     
-    assert result["success"], f"关闭技能包失败"
-    print(f"✅ {result['message']}")
+    print(f"禁用结果：{result}")
+    assert result['success'], f"禁用失败：{result.get('error')}"
     
-    # 检查工具是否移除
+    print(f"✅ 技能包禁用成功")
+    print(f"✅ 移除了 {result.get('sub_tools_removed', 0)} 个子工具")
+    
+    # 检查工具列表
     all_tools = await provider.list_tools()
     print(f"✅ 当前工具数：{len(all_tools)}")
+    
+    # 验证子工具已移除
+    tool_names = [t.name for t in all_tools]
+    assert 'http_get' not in tool_names, "http_get 应该已移除"
+    assert 'http_post' not in tool_names, "http_post 应该已移除"
+    assert 'web_tool' in tool_names, "web_tool 应该保留"
+    print(f"✅ 子工具已正确移除，只保留技能包工具")
 
 
 async def test_workflow():
     """测试 5: 完整工作流程"""
     print_section("测试 5: 完整工作流程")
     
-    print("步骤 1: 初始化服务器")
-    manager = initialize_server()
-    print("✅ 服务器已初始化")
+    print("步骤 1: 查看可用技能包")
+    initial_tools = await provider.list_tools()
+    print(f"✅ 初始工具：{[t.name for t in initial_tools]}")
     
-    print("\n步骤 2: 查看技能包列表")
-    packages = list_packages()
-    print(f"✅ 发现 {packages['total_count']} 个技能包")
-    
-    print("\n步骤 3: 打开 web 技能包")
-    result = open_package(package_name="web")
-    assert result["success"]
+    print("\n步骤 2: 启用 web 技能包")
+    web_tool = await provider.get_tool('web_tool')
+    result = await web_tool.fn(enable=True)
     print(f"✅ {result['message']}")
     
-    print("\n步骤 4: 检查工具列表")
-    tools = await provider.list_tools()
-    print(f"✅ 当前工具数：{len(tools)}")
+    print("\n步骤 3: 查看启用后的工具列表")
+    tools_after_enable = await provider.list_tools()
+    print(f"✅ 工具数：{len(tools_after_enable)}")
+    for tool in tools_after_enable:
+        print(f"   - {tool.name}")
     
-    print("\n步骤 5: 关闭 web 技能包")
-    result = close_package(package_name="web")
-    assert result["success"]
+    print("\n步骤 4: 使用子工具（模拟）")
+    http_get = await provider.get_tool('http_get')
+    assert http_get is not None, "http_get 应该可用"
+    print(f"✅ http_get 工具可用")
+    
+    print("\n步骤 5: 禁用 web 技能包")
+    result = await web_tool.fn(enable=False)
     print(f"✅ {result['message']}")
+    
+    print("\n步骤 6: 查看禁用后的工具列表")
+    tools_after_disable = await provider.list_tools()
+    print(f"✅ 工具数：{len(tools_after_disable)}")
+    for tool in tools_after_disable:
+        print(f"   - {tool.name}")
     
     print("\n✅ 完整工作流程测试通过")
+
+
+async def test_resource():
+    """测试 6: 技能包资源"""
+    print_section("测试 6: 技能包资源")
+    
+    from skillmcp.server import list_packages_resource
+    
+    resource = list_packages_resource()
+    
+    assert resource is not None, "资源应该存在"
+    assert "web_tool" in resource, "资源应该包含 web_tool"
+    assert "技能包" in resource or "SkillMCP" in resource, "资源格式应该正确"
+    
+    print(f"✅ 技能包资源格式正确")
+    print("\n资源预览:")
+    print("-" * 60)
+    lines = resource.split('\n')[:15]
+    for line in lines:
+        print(line)
+    print("-" * 60)
 
 
 async def main():
     """运行所有测试"""
     print("\n")
     print("╔" + "=" * 58 + "╗")
-    print("║" + " " * 10 + "SkillMCP 自测脚本 (FastMCP v3 Provider)" + " " * 5 + "║")
+    print("║" + " " * 12 + "SkillMCP 自测脚本 (技能包即工具)" + " " * 10 + "║")
     print("╚" + "=" * 58 + "╝")
     
     tests = [
-        ("服务器初始化", test_initialization),
-        ("列出技能包", test_list_packages),
-        ("打开技能包", test_open_package),
-        ("关闭技能包", test_close_package),
+        ("模块加载和初始化", test_initialization),
+        ("web_tool 工具", test_web_tool),
+        ("启用技能包", test_enable_package),
+        ("禁用技能包", test_disable_package),
         ("完整工作流程", test_workflow),
+        ("技能包资源", test_resource),
     ]
     
     passed = 0
@@ -169,6 +218,11 @@ async def main():
         return 1
     else:
         print("\n🎉 所有测试通过!")
+        print("\n📊 设计理念验证:")
+        print("   ✅ 技能包 = 工具（带 enable 参数）")
+        print("   ✅ 没有管理工具，所有工具都是业务工具")
+        print("   ✅ 启用后注册子工具，禁用后移除")
+        print("   ✅ Token 优化：初始只有技能包工具")
         return 0
 
 
