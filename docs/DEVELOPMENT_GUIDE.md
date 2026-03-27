@@ -185,34 +185,64 @@ Tool(
 
 ### 使用列表参数
 
+对于 `array` 类型，需要使用 `items` 字段指定元素类型：
+
 ```python
+# 示例 1: 数字列表
+ToolParameter(
+    name="numbers",
+    type="array",
+    description="数字列表",
+    items={"type": "number"}  # 元素类型
+)
+# AI 会传入：[1, 2, 3, 4.5]
+
+# 示例 2: 字符串列表
+ToolParameter(
+    name="tags",
+    type="array",
+    description="标签列表",
+    items={"type": "string"}  # 元素类型
+)
+# AI 会传入：["tag1", "tag2", "tag3"]
+
+# 示例 3: 对象列表
+ToolParameter(
+    name="users",
+    type="array",
+    description="用户列表",
+    items={
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "age": {"type": "integer"}
+        }
+    }
+)
+# AI 会传入：[{"name": "Alice", "age": 25}, ...]
+
+# 完整工具示例
 Tool(
     name="process_list",
     description="处理列表",
     parameters=[
         ToolParameter(
             name="items",
-            type="array",        # 列表类型
-            description="要处理的列表",
-            required=True
-        ),
-        ToolParameter(
-            name="operation",
-            type="string",
-            description="操作类型",
-            required=False
+            type="array",
+            description="要处理的数字列表",
+            required=True,
+            items={"type": "number"}
         ),
     ],
     handler=process_list_handler
 )
 
 
-def process_list_handler(items: List[Any], operation: Optional[str] = "sum") -> Dict[str, Any]:
+def process_list_handler(items: List[Any]) -> Dict[str, Any]:
     """处理列表
     
     Args:
-        items: 列表参数
-        operation: 操作类型
+        items: 列表参数，AI 会根据 items 字段知道应该传入数字
     """
     result = sum(x for x in items if isinstance(x, (int, float)))
     return {
@@ -220,6 +250,15 @@ def process_list_handler(items: List[Any], operation: Optional[str] = "sum") -> 
         "data": {"result": result}
     }
 ```
+
+### items 字段说明
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `items.type` | 元素类型 | `"string"`, `"number"`, `"object"` |
+| `items.properties` | 对象属性（当元素是 object 时） | `{"name": {"type": "string"}}` |
+
+AI 客户端会根据 `items` 字段生成正确的 JSON Schema，从而知道数组元素应该是什么类型。
 
 ### 工具实现
 

@@ -55,8 +55,19 @@ def get_tools():
             name="process_list",
             description="处理列表 - 展示如何接收列表参数",
             parameters=[
-                ToolParameter(name="items", type="array", description="要处理的列表", required=True),
-                ToolParameter(name="operation", type="string", description="操作类型 (sum, count, filter)", required=False),
+                ToolParameter(
+                    name="items",
+                    type="array",
+                    description="要处理的数字列表",
+                    required=True,
+                    items={"type": "number"}  # 指定数组元素类型为 number
+                ),
+                ToolParameter(
+                    name="operation",
+                    type="string",
+                    description="操作类型 (sum, count, filter)",
+                    required=False,
+                ),
             ],
             handler=process_list_handler
         ),

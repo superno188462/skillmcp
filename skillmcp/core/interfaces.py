@@ -29,6 +29,7 @@ class ToolParameter:
     required: bool = False
     default: Any = None
     enum: Optional[List[Any]] = None
+    items: Optional[Dict[str, Any]] = None  # 数组元素类型（用于 array 类型）
     
     def to_dict(self) -> Dict:
         """转换为字典格式"""
@@ -43,6 +44,8 @@ class ToolParameter:
             result["default"] = self.default
         if self.enum:
             result["enum"] = self.enum
+        if self.items:
+            result["items"] = self.items
         return result
 
 
