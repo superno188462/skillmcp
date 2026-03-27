@@ -262,11 +262,18 @@ def list_packages_resource() -> str:
 logger.info("SkillMCP 模块加载，开始初始化...")
 _package_manager = get_package_manager()
 
-# 为每个技能包创建控制工具
+# 为每个技能包创建控制工具（只处理 visible=True 的技能包）
 for pkg_name, pkg_info in _package_manager.packages.items():
-    create_package_tool(pkg_name, pkg_info.to_dict() if hasattr(pkg_info, 'to_dict') else pkg_info.__dict__)
+    pkg_dict = pkg_info.to_dict() if hasattr(pkg_info, 'to_dict') else pkg_info.__dict__
+    
+    # 跳过不可见的技能包
+    if not pkg_dict.get('visible', True):
+        logger.info(f"跳过不可见技能包：{pkg_name}")
+        continue
+    
+    create_package_tool(pkg_name, pkg_dict)
 
-# 自动启用标记为 default_enabled 的技能包
+# 自动启用标记为 default_enabled 的技能包（只处理 visible=True 的技能包）
 for pkg_name, pkg_info in _package_manager.packages.items():
     # 获取技能包配置字典
     if hasattr(pkg_info, 'to_dict'):
@@ -275,6 +282,10 @@ for pkg_name, pkg_info in _package_manager.packages.items():
         pkg_dict = pkg_info.__dict__
     else:
         pkg_dict = pkg_info
+    
+    # 跳过不可见的技能包
+    if not pkg_dict.get('visible', True):
+        continue
     
     # 检查是否默认启用
     if pkg_dict.get('default_enabled', False):

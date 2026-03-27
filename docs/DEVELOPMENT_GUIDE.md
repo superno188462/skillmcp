@@ -99,16 +99,49 @@ SKILL_PACKAGE = {
     
     # 是否默认启用（默认：False）
     "default_enabled": True,  # 设置为 True 则启动时自动启用
+    
+    # 是否暴露给客户端（默认：True）
+    "visible": False,  # 设置为 False 则完全不暴露给客户端
 }
 ```
 
-### 就这么简单！
+### 字段说明
 
-不需要：
-- ❌ `tools` 列表（自动从 `get_tools()` 获取）
-- ❌ `exposure` 配置（使用 description）
-- ❌ `category`、`tags`（不需要）
-- ❌ `dependencies`（不需要）
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `default_enabled` | `bool` | `False` | 是否默认启用 |
+| `visible` | `bool` | `True` | 是否暴露给客户端 |
+
+### 使用场景
+
+**场景 1：完全隐藏技能包**
+```python
+SKILL_PACKAGE = {
+    "name": "internal_tool",
+    "description": "内部工具包",
+    "visible": False,  # ❌ 不暴露给客户端
+}
+```
+
+**场景 2：默认启用但可手动关闭**
+```python
+SKILL_PACKAGE = {
+    "name": "common_utils",
+    "description": "常用工具",
+    "default_enabled": True,  # ✅ 启动时自动启用
+    "visible": True,  # 客户端可以看到并控制
+}
+```
+
+**场景 3：默认不启用但可见**
+```python
+SKILL_PACKAGE = {
+    "name": "optional_feature",
+    "description": "可选功能",
+    "default_enabled": False,  # 默认不启用
+    "visible": True,  # 客户端可以看到并手动启用
+}
+```
 
 ---
 

@@ -135,7 +135,7 @@ class SkillPackage:
     """技能包（工具包）元数据
     
     技能包是 SkillMCP 的基本单位，每个技能包包含一组相关的工具。
-    通过配置控制是否默认启用。
+    通过配置控制是否默认启用和是否暴露。
     """
     name: str
     version: str
@@ -144,6 +144,7 @@ class SkillPackage:
     tools: List[str] = field(default_factory=list)
     dependencies: List[str] = field(default_factory=list)
     default_enabled: bool = False  # 是否默认启用
+    visible: bool = True  # 是否暴露给客户端（默认 True）
     category: str = "general"  # 分类：general, web, data, system 等
     tags: List[str] = field(default_factory=list)  # 标签
     
@@ -158,6 +159,7 @@ class SkillPackage:
             tools=data.get("tools", []),
             dependencies=data.get("dependencies", []),
             default_enabled=data.get("default_enabled", False),
+            visible=data.get("visible", True),
             category=data.get("category", "general"),
             tags=data.get("tags", []),
         )
@@ -172,6 +174,7 @@ class SkillPackage:
             "tools": self.tools,
             "dependencies": self.dependencies,
             "default_enabled": self.default_enabled,
+            "visible": self.visible,
             "category": self.category,
             "tags": self.tags,
         }
