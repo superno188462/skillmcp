@@ -22,7 +22,7 @@ def main():
 @click.option("--package-dir", default="packages", help="技能包目录")
 @click.option("--config", default="skillmcp.json", help="配置文件")
 @click.option("--log-level", default="INFO", help="日志级别")
-@click.option("--transport", default="stdio", type=click.Choice(["stdio", "sse"]), help="传输方式")
+@click.option("--transport", default="sse", type=click.Choice(["stdio", "sse"]), help="传输方式")
 def start(host, port, package_dir, config, log_level, transport):
     """启动 SkillMCP FastMCP 服务器"""
     logger.remove()
@@ -49,7 +49,7 @@ def start(host, port, package_dir, config, log_level, transport):
     # 运行服务器
     if transport == "sse":
         logger.info(f"SSE 模式：http://{host}:{port}/sse")
-        mcp.run(transport="sse", host=host, port=port)
+        mcp.run(transport="sse")
     else:
         logger.info("STDIO 模式：通过标准输入输出通信")
         mcp.run(transport="stdio")
