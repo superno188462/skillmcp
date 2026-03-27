@@ -114,47 +114,39 @@ SKILL_PACKAGE = {
 
 ### 使用场景
 
-**场景 1：可见但默认不启用（最常见）**
+**示例配置**（见 `packages/demo/__init__.py`）：
 ```python
 SKILL_PACKAGE = {
-    "name": "optional_feature",
-    "description": "可选功能",
-    "visible": True,         # ✅ 客户端可以看到
-    "default_enabled": False, # 默认不启用，需要手动启用
-}
-```
-**示例**: `demo_visible` 技能包
-
-**场景 2：不可见但默认启用（内部使用）**
-```python
-SKILL_PACKAGE = {
-    "name": "internal_tool",
-    "description": "内部工具",
-    "visible": False,        # ❌ 客户端看不到
-    "default_enabled": True,  # 启动时自动启用
-}
-```
-**示例**: `demo_hidden` 技能包
-
-**场景 3：可见且默认启用**
-```python
-SKILL_PACKAGE = {
-    "name": "common_utils",
-    "description": "常用工具",
-    "visible": True,         # ✅ 客户端可以看到
-    "default_enabled": True,  # ✅ 启动时自动启用
+    "name": "demo",
+    "description": "示例技能包",
+    "visible": True,         # 是否对客户端可见
+    "default_enabled": False, # 是否默认启用
 }
 ```
 
-**场景 4：不可见且默认不启用（完全隐藏）**
+**场景 1: 可见但默认不启用**（最常见）
 ```python
-SKILL_PACKAGE = {
-    "name": "deprecated_tool",
-    "description": "已弃用的工具",
-    "visible": False,        # ❌ 客户端看不到
-    "default_enabled": False, # 也不启用
-}
+visible=True, default_enabled=False
 ```
+客户端可以看到技能包，需要手动调用 `demo_tool(enable=True)` 启用。
+
+**场景 2: 可见且默认启用**
+```python
+visible=True, default_enabled=True
+```
+客户端可以看到，服务器启动时自动启用。
+
+**场景 3: 不可见但默认启用**（内部使用）
+```python
+visible=False, default_enabled=True
+```
+客户端看不到，服务器启动时自动启用（仅供内部使用）。
+
+**场景 4: 不可见且默认不启用**（完全隐藏）
+```python
+visible=False, default_enabled=False
+```
+客户端看不到，也不启用（相当于禁用）。
 
 ---
 

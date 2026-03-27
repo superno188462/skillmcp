@@ -1,9 +1,11 @@
 """
-示例技能包 1 - visible=True, default_enabled=False
+示例技能包 - 展示 visible 和 default_enabled 字段用法
 
-这个技能包展示：
-- visible=True: 对客户端可见
-- default_enabled=False: 默认不启用，需要手动启用
+这个技能包展示如何配置技能包的可见性和默认启用状态。
+
+配置说明：
+- visible: 控制技能包是否对客户端可见
+- default_enabled: 控制技能包是否在服务器启动时自动启用
 """
 
 from skillmcp.core.interfaces import Tool, ToolParameter
@@ -11,15 +13,19 @@ from typing import Dict, Any, Optional
 
 
 SKILL_PACKAGE = {
-    "name": "demo_visible",
+    "name": "demo",
     "version": "1.0.0",
-    "description": "示例技能包 1 - 可见但默认不启用（需要手动启用）",
+    "description": "示例技能包 - 展示 visible 和 default_enabled 字段用法",
     "author": "SkillMCP Team",
     
-    # 对客户端可见（默认值，可省略）
+    # 字段 1: visible - 是否对客户端可见
+    # True (默认): 客户端可以看到并控制
+    # False: 完全隐藏，客户端看不到
     "visible": True,
     
-    # 默认不启用（默认值，可省略）
+    # 字段 2: default_enabled - 是否默认启用
+    # True: 服务器启动时自动启用
+    # False (默认): 需要手动启用
     "default_enabled": False,
 }
 
@@ -74,3 +80,24 @@ def http_post_handler(url: str, data: Optional[Dict[str, Any]] = None) -> Dict[s
             "body": "示例响应数据"
         }
     }
+
+
+# ============================================================================
+# 配置示例（供参考）
+# ============================================================================
+
+# 场景 1: 可见但默认不启用（最常见，当前配置）
+# visible=True, default_enabled=False
+# 客户端可以看到技能包，需要手动启用
+
+# 场景 2: 可见且默认启用
+# visible=True, default_enabled=True
+# 客户端可以看到，启动时自动启用
+
+# 场景 3: 不可见但默认启用（内部使用）
+# visible=False, default_enabled=True
+# 客户端看不到，启动时自动启用（仅供内部使用）
+
+# 场景 4: 不可见且默认不启用（完全隐藏）
+# visible=False, default_enabled=False
+# 客户端看不到，也不启用（相当于禁用）
