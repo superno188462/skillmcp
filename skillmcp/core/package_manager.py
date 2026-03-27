@@ -58,20 +58,20 @@ class ToolPackageManager:
             package_name: 工具包名称
             
         Returns:
-            是否默认显示/加载
+            是否可见
         """
         # 1. 检查配置文件
         if "packages" in self.config:
             pkg_config = self.config["packages"].get(package_name, {})
-            if "default_visible" in pkg_config:
-                return pkg_config["default_visible"]
+            if "visible" in pkg_config:
+                return pkg_config["visible"]
         
         # 2. 使用包元数据中的值
         if package_name in self.packages:
-            return self.packages[package_name].default_visible
+            return self.packages[package_name].visible
         
-        # 3. 默认不显示
-        return False
+        # 3. 默认可见
+        return True
     
     def discover_packages(self) -> List[SkillPackage]:
         """发现所有可用的工具包
@@ -130,7 +130,7 @@ class ToolPackageManager:
                     author=old_info.author,
                     tools=old_info.tools,
                     dependencies=old_info.dependencies,
-                    default_visible=old_info.auto_load,
+                    visible=old_info.auto_load if hasattr(old_info, 'auto_load') else True,
                 )
             else:
                 # 使用默认信息
@@ -138,7 +138,7 @@ class ToolPackageManager:
                     name=pkg_path.name,
                     version="0.1.0",
                     description=f"工具包：{pkg_path.name}",
-                    default_visible=False,
+                    visible=True,
                 )
         except Exception as e:
             logger.error(f"加载工具包信息失败 {pkg_path}: {e}")

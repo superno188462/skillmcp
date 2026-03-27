@@ -114,32 +114,45 @@ SKILL_PACKAGE = {
 
 ### 使用场景
 
-**场景 1：完全隐藏技能包**
-```python
-SKILL_PACKAGE = {
-    "name": "internal_tool",
-    "description": "内部工具包",
-    "visible": False,  # ❌ 不暴露给客户端
-}
-```
-
-**场景 2：默认启用但可手动关闭**
-```python
-SKILL_PACKAGE = {
-    "name": "common_utils",
-    "description": "常用工具",
-    "default_enabled": True,  # ✅ 启动时自动启用
-    "visible": True,  # 客户端可以看到并控制
-}
-```
-
-**场景 3：默认不启用但可见**
+**场景 1：可见但默认不启用（最常见）**
 ```python
 SKILL_PACKAGE = {
     "name": "optional_feature",
     "description": "可选功能",
-    "default_enabled": False,  # 默认不启用
-    "visible": True,  # 客户端可以看到并手动启用
+    "visible": True,         # ✅ 客户端可以看到
+    "default_enabled": False, # 默认不启用，需要手动启用
+}
+```
+**示例**: `demo_visible` 技能包
+
+**场景 2：不可见但默认启用（内部使用）**
+```python
+SKILL_PACKAGE = {
+    "name": "internal_tool",
+    "description": "内部工具",
+    "visible": False,        # ❌ 客户端看不到
+    "default_enabled": True,  # 启动时自动启用
+}
+```
+**示例**: `demo_hidden` 技能包
+
+**场景 3：可见且默认启用**
+```python
+SKILL_PACKAGE = {
+    "name": "common_utils",
+    "description": "常用工具",
+    "visible": True,         # ✅ 客户端可以看到
+    "default_enabled": True,  # ✅ 启动时自动启用
+}
+```
+
+**场景 4：不可见且默认不启用（完全隐藏）**
+```python
+SKILL_PACKAGE = {
+    "name": "deprecated_tool",
+    "description": "已弃用的工具",
+    "visible": False,        # ❌ 客户端看不到
+    "default_enabled": False, # 也不启用
 }
 ```
 

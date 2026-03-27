@@ -243,6 +243,11 @@ def list_packages_resource() -> str:
     
     lines = ["SkillMCP 技能包列表", "=" * 60]
     for pkg in packages:
+        # 跳过不可见的技能包
+        pkg_dict = pkg.to_dict() if hasattr(pkg, 'to_dict') else pkg.__dict__
+        if not pkg_dict.get('visible', True):
+            continue
+        
         status = "✓ 已启用" if pkg.name in _active_packages else "○ 未启用"
         tool_name = f"{pkg.name}_tool"
         lines.append(f"[{status}] {tool_name:20} - {pkg.description}")
