@@ -206,7 +206,7 @@ ToolParameter(
 )
 # AI 会传入：["tag1", "tag2", "tag3"]
 
-# 示例 3: 对象列表
+# 示例 3: 对象列表（字典数组）- 多个字段
 ToolParameter(
     name="users",
     type="array",
@@ -214,40 +214,73 @@ ToolParameter(
     items={
         "type": "object",
         "properties": {
-            "name": {"type": "string"},
-            "age": {"type": "integer"}
-        }
+            "name": {
+                "type": "string",
+                "description": "用户姓名"
+            },
+            "age": {
+                "type": "integer",
+                "description": "用户年龄"
+            },
+            "email": {
+                "type": "string",
+                "description": "用户邮箱"
+            },
+            "tags": {
+                "type": "array",
+                "description": "用户标签",
+                "items": {"type": "string"}
+            }
+        },
+        "required": ["name", "age"]  # 必需字段
     }
 )
-# AI 会传入：[{"name": "Alice", "age": 25}, ...]
+# AI 会传入：
+# [
+#   {"name": "Alice", "age": 25, "email": "alice@example.com", "tags": ["vip", "new"]},
+#   {"name": "Bob", "age": 30, "email": "bob@example.com"}
+# ]
 
 # 完整工具示例
 Tool(
-    name="process_list",
-    description="处理列表",
+    name="process_users",
+    description="处理用户列表",
     parameters=[
         ToolParameter(
-            name="items",
+            name="users",
             type="array",
-            description="要处理的数字列表",
+            description="用户列表",
             required=True,
-            items={"type": "number"}
+            items={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "age": {"type": "integer"},
+                    "email": {"type": "string"}
+                },
+                "required": ["name", "age"]
+            }
         ),
     ],
-    handler=process_list_handler
+    handler=process_users_handler
 )
 
 
-def process_list_handler(items: List[Any]) -> Dict[str, Any]:
-    """处理列表
+def process_users_handler(users: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """处理用户列表
     
     Args:
-        items: 列表参数，AI 会根据 items 字段知道应该传入数字
+        users: 用户列表，每个用户是字典
+               AI 会根据 items 知道每个字典应该有 name, age, email 字段
     """
-    result = sum(x for x in items if isinstance(x, (int, float)))
+    for user in users:
+        name = user["name"]
+        age = user["age"]
+        email = user.get("email", "")
+    
     return {
         "success": True,
-        "data": {"result": result}
+        "data": {"count": len(users)}
     }
 ```
 

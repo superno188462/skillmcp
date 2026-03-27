@@ -71,6 +71,48 @@ def get_tools():
             ],
             handler=process_list_handler
         ),
+        Tool(
+            name="process_users",
+            description="处理用户列表 - 展示对象数组参数",
+            parameters=[
+                ToolParameter(
+                    name="users",
+                    type="array",
+                    description="用户列表",
+                    required=True,
+                    items={
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "用户姓名"
+                            },
+                            "age": {
+                                "type": "integer",
+                                "description": "用户年龄"
+                            },
+                            "email": {
+                                "type": "string",
+                                "description": "用户邮箱"
+                            },
+                            "tags": {
+                                "type": "array",
+                                "description": "用户标签",
+                                "items": {"type": "string"}
+                            }
+                        },
+                        "required": ["name", "age"]  # 必需字段
+                    }
+                ),
+                ToolParameter(
+                    name="filter_age",
+                    type="integer",
+                    description="年龄过滤条件",
+                    required=False,
+                ),
+            ],
+            handler=process_users_handler
+        ),
     ]
 
 
@@ -128,6 +170,35 @@ def process_list_handler(items: List[Any], operation: Optional[str] = "sum") -> 
             "input": items,
             "operation": operation,
             "result": result
+        }
+    }
+
+
+def process_users_handler(users: List[Dict[str, Any]], filter_age: Optional[int] = None) -> Dict[str, Any]:
+    """处理用户列表工具实现
+    
+    Args:
+        users: 用户列表，每个用户是字典：{"name": str, "age": int, "email": str, "tags": List[str]}
+        filter_age: 年龄过滤条件
+    """
+    # 过滤用户
+    if filter_age is not None:
+        filtered_users = [u for u in users if u.get("age", 0) >= filter_age]
+    else:
+        filtered_users = users
+    
+    # 统计信息
+    total = len(users)
+    filtered_count = len(filtered_users)
+    avg_age = sum(u.get("age", 0) for u in filtered_users) / filtered_count if filtered_count > 0 else 0
+    
+    return {
+        "success": True,
+        "data": {
+            "total_users": total,
+            "filtered_users": filtered_count,
+            "average_age": round(avg_age, 2),
+            "users": filtered_users
         }
     }
 
