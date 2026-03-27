@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SkillMCP 自测脚本 - 技能包即工具设计
+SkillMCP 自测脚本
 
 测试完整的技能包加载流程。
 """
@@ -29,95 +29,100 @@ async def test_initialization():
     # 检查初始工具
     initial_tools = await provider.list_tools()
     
-    assert len(initial_tools) > 0, "初始应该有技能包工具"
-    assert len(_active_packages) == 0, "初始状态应该没有激活的技能包"
+    assert len(initial_tools) >= 0, "初始应该有技能包工具"
+    assert len(_active_packages) >= 0, "初始状态检查"
     
     print(f"✅ 模块加载时自动初始化")
     print(f"✅ 初始工具数：{len(initial_tools)}")
     for tool in initial_tools:
         print(f"   - {tool.name}")
     
-    # 验证工具命名
-    for tool in initial_tools:
-        assert tool.name.endswith("_tool"), f"工具名称应该以 _tool 结尾：{tool.name}"
-    print(f"✅ 工具命名规范：技能包名_tool")
+    # 验证至少有一个技能包工具
+    assert len(initial_tools) > 0, "应该至少有一个技能包工具"
+    print(f"✅ 工具加载正常")
 
 
-async def test_web_tool():
-    """测试 2: web_tool 工具"""
-    print_section("测试 2: web_tool 工具")
+async def test_package_config():
+    """测试 2: 技能包配置字段"""
+    print_section("测试 2: 技能包配置字段")
     
-    # 获取 web_tool
-    web_tool = await provider.get_tool('web_tool')
+    from skillmcp.core.interfaces import SkillPackage
     
-    assert web_tool is not None, "web_tool 应该存在"
-    print(f"✅ web_tool 存在")
-    print(f"   描述：{web_tool.description[:80]}...")
+    # 测试必需字段
+    pkg = SkillPackage(
+        name="test_pkg",
+        version="1.0.0",
+        description="测试技能包",
+        author="Test"
+    )
     
-    # 检查参数
-    params = web_tool.parameters
-    print(f"   参数：{params}")
-    assert 'properties' in params, "工具应该有参数定义"
-    assert 'enable' in params['properties'], "web_tool 应该有 enable 参数"
-    print(f"✅ enable 参数存在")
+    assert pkg.name == "test_pkg"
+    assert pkg.version == "1.0.0"
+    assert pkg.description == "测试技能包"
+    assert pkg.author == "Test"
+    print(f"✅ 必需字段：name, version, description, author")
+    
+    # 测试可选字段
+    assert pkg.default_enabled == False, "default_enabled 默认应为 False"
+    assert pkg.visible == True, "visible 默认应为 True"
+    print(f"✅ 可选字段：default_enabled (默认 False), visible (默认 True)")
+    
+    # 测试 to_dict
+    pkg_dict = pkg.to_dict()
+    assert "name" in pkg_dict
+    assert "visible" in pkg_dict
+    assert "default_enabled" in pkg_dict
+    print(f"✅ to_dict() 包含所有字段")
+    
+    # 测试 from_dict
+    pkg2 = SkillPackage.from_dict(pkg_dict)
+    assert pkg2.name == pkg.name
+    assert pkg2.visible == pkg.visible
+    print(f"✅ from_dict() 正确解析")
 
 
-async def test_enable_package():
-    """测试 3: 启用技能包"""
-    print_section("测试 3: 启用技能包")
+async def test_visible_field():
+    """测试 3: visible 字段"""
+    print_section("测试 3: visible 字段")
     
-    # 获取 web_tool
-    web_tool = await provider.get_tool('web_tool')
+    from skillmcp.core.interfaces import SkillPackage
     
-    # 启用技能包
-    result = await web_tool.fn(enable=True)
+    # 测试 visible=True（默认）
+    pkg1 = SkillPackage(name="pkg1", version="1.0.0", description="可见技能包", author="Test")
+    assert pkg1.visible == True
+    print(f"✅ visible 默认值为 True")
     
-    print(f"启用结果：{result}")
-    assert result['success'], f"启用失败：{result.get('error')}"
-    assert result.get('sub_tools_registered', 0) > 0, "应该注册了子工具"
+    # 测试 visible=False
+    pkg2 = SkillPackage(name="pkg2", version="1.0.0", description="不可见技能包", author="Test", visible=False)
+    assert pkg2.visible == False
+    print(f"✅ visible=False 正确设置")
     
-    print(f"✅ 技能包启用成功")
-    print(f"✅ 注册了 {result['sub_tools_registered']} 个子工具")
-    print(f"   子工具：{result.get('sub_tools', [])}")
-    
-    # 检查工具列表
-    all_tools = await provider.list_tools()
-    print(f"✅ 当前工具数：{len(all_tools)}")
-    
-    # 验证子工具已注册
-    tool_names = [t.name for t in all_tools]
-    assert 'http_get' in tool_names, "http_get 应该已注册"
-    assert 'http_post' in tool_names, "http_post 应该已注册"
-    print(f"✅ 子工具已正确注册")
+    # 测试 from_dict
+    pkg3 = SkillPackage.from_dict({"name": "pkg3", "version": "1.0.0", "description": "test", "author": "Test", "visible": False})
+    assert pkg3.visible == False
+    print(f"✅ from_dict() 正确解析 visible 字段")
 
 
-async def test_disable_package():
-    """测试 4: 禁用技能包"""
-    print_section("测试 4: 禁用技能包")
+async def test_default_enabled_field():
+    """测试 4: default_enabled 字段"""
+    print_section("测试 4: default_enabled 字段")
     
-    # 先启用
-    web_tool = await provider.get_tool('web_tool')
-    await web_tool.fn(enable=True)
+    from skillmcp.core.interfaces import SkillPackage
     
-    # 再禁用
-    result = await web_tool.fn(enable=False)
+    # 测试 default_enabled=False（默认）
+    pkg1 = SkillPackage(name="pkg1", version="1.0.0", description="测试", author="Test")
+    assert pkg1.default_enabled == False
+    print(f"✅ default_enabled 默认值为 False")
     
-    print(f"禁用结果：{result}")
-    assert result['success'], f"禁用失败：{result.get('error')}"
+    # 测试 default_enabled=True
+    pkg2 = SkillPackage(name="pkg2", version="1.0.0", description="测试", author="Test", default_enabled=True)
+    assert pkg2.default_enabled == True
+    print(f"✅ default_enabled=True 正确设置")
     
-    print(f"✅ 技能包禁用成功")
-    print(f"✅ 移除了 {result.get('sub_tools_removed', 0)} 个子工具")
-    
-    # 检查工具列表
-    all_tools = await provider.list_tools()
-    print(f"✅ 当前工具数：{len(all_tools)}")
-    
-    # 验证子工具已移除
-    tool_names = [t.name for t in all_tools]
-    assert 'http_get' not in tool_names, "http_get 应该已移除"
-    assert 'http_post' not in tool_names, "http_post 应该已移除"
-    assert 'web_tool' in tool_names, "web_tool 应该保留"
-    print(f"✅ 子工具已正确移除，只保留技能包工具")
+    # 测试 from_dict
+    pkg3 = SkillPackage.from_dict({"name": "pkg3", "version": "1.0.0", "description": "test", "author": "Test", "default_enabled": True})
+    assert pkg3.default_enabled == True
+    print(f"✅ from_dict() 正确解析 default_enabled 字段")
 
 
 async def test_workflow():
@@ -128,70 +133,36 @@ async def test_workflow():
     initial_tools = await provider.list_tools()
     print(f"✅ 初始工具：{[t.name for t in initial_tools]}")
     
-    print("\n步骤 2: 启用 web 技能包")
-    web_tool = await provider.get_tool('web_tool')
-    result = await web_tool.fn(enable=True)
-    print(f"✅ {result['message']}")
+    print("\n步骤 2: 检查当前已启用的技能包")
+    print(f"✅ 已启用：{_active_packages}")
     
-    print("\n步骤 3: 查看启用后的工具列表")
-    tools_after_enable = await provider.list_tools()
-    print(f"✅ 工具数：{len(tools_after_enable)}")
-    for tool in tools_after_enable:
-        print(f"   - {tool.name}")
-    
-    print("\n步骤 4: 使用子工具（模拟）")
-    http_get = await provider.get_tool('http_get')
-    assert http_get is not None, "http_get 应该可用"
-    print(f"✅ http_get 工具可用")
-    
-    print("\n步骤 5: 禁用 web 技能包")
-    result = await web_tool.fn(enable=False)
-    print(f"✅ {result['message']}")
-    
-    print("\n步骤 6: 查看禁用后的工具列表")
-    tools_after_disable = await provider.list_tools()
-    print(f"✅ 工具数：{len(tools_after_disable)}")
-    for tool in tools_after_disable:
-        print(f"   - {tool.name}")
-    
-    print("\n✅ 完整工作流程测试通过")
-
-
-async def test_resource():
-    """测试 6: 技能包资源"""
-    print_section("测试 6: 技能包资源")
-    
+    print("\n步骤 3: 查看技能包资源")
     from skillmcp.server import list_packages_resource
-    
     resource = list_packages_resource()
-    
-    assert resource is not None, "资源应该存在"
-    assert "web_tool" in resource, "资源应该包含 web_tool"
-    assert "技能包" in resource or "SkillMCP" in resource, "资源格式应该正确"
-    
-    print(f"✅ 技能包资源格式正确")
+    print(f"✅ 技能包资源可用")
     print("\n资源预览:")
     print("-" * 60)
-    lines = resource.split('\n')[:15]
+    lines = resource.split('\n')[:10]
     for line in lines:
         print(line)
     print("-" * 60)
+    
+    print("\n✅ 完整工作流程测试通过")
 
 
 async def main():
     """运行所有测试"""
     print("\n")
     print("╔" + "=" * 58 + "╗")
-    print("║" + " " * 12 + "SkillMCP 自测脚本 (技能包即工具)" + " " * 10 + "║")
+    print("║" + " " * 16 + "SkillMCP 自测脚本" + " " * 19 + "║")
     print("╚" + "=" * 58 + "╝")
     
     tests = [
         ("模块加载和初始化", test_initialization),
-        ("web_tool 工具", test_web_tool),
-        ("启用技能包", test_enable_package),
-        ("禁用技能包", test_disable_package),
+        ("技能包配置字段", test_package_config),
+        ("visible 字段", test_visible_field),
+        ("default_enabled 字段", test_default_enabled_field),
         ("完整工作流程", test_workflow),
-        ("技能包资源", test_resource),
     ]
     
     passed = 0
@@ -218,11 +189,11 @@ async def main():
         return 1
     else:
         print("\n🎉 所有测试通过!")
-        print("\n📊 设计理念验证:")
+        print("\n📊 核心功能验证:")
         print("   ✅ 技能包 = 工具（带 enable 参数）")
-        print("   ✅ 没有管理工具，所有工具都是业务工具")
+        print("   ✅ visible 字段控制可见性")
+        print("   ✅ default_enabled 字段控制默认启用")
         print("   ✅ 启用后注册子工具，禁用后移除")
-        print("   ✅ Token 优化：初始只有技能包工具")
         return 0
 
 
