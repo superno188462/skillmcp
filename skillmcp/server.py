@@ -141,23 +141,40 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             
                             params_str = ", ".join(param_strs)
                             
-                            # 使用闭包创建动态函数（避免 exec 的作用域问题）
-                            def make_handler(th, param_names):
-                                """创建工具处理器"""
-                                async def handler(**kwargs):
-                                    try:
-                                        # 过滤参数
-                                        filtered_kwargs = {k: v for k, v in kwargs.items() if k in param_names}
-                                        result = th(**filtered_kwargs)
-                                        if asyncio.iscoroutine(result):
-                                            result = await result
-                                        return {"success": True, "data": result}
-                                    except Exception as e:
-                                        logger.error(f"工具执行失败：{e}")
-                                        return {"success": False, "error": str(e)}
-                                return handler
+                            # 动态创建有明确签名的函数
+                            import inspect
                             
-                            sub_handler = make_handler(tool_handler, [p.name for p in tool_params])
+                            # 创建函数代码
+                            func_code = f"""
+async def handler({params_str}):
+    try:
+        kwargs = {{}}
+        for name in param_names:
+            if name in locals():
+                kwargs[name] = locals()[name]
+        result = th(**kwargs)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return {{"success": True, "data": result}}
+    except Exception as e:
+        logger.error(f"工具执行失败：{{e}}")
+        return {{"success": False, "error": str(e)}}
+"""
+                            
+                            # 创建执行环境
+                            local_ns = {
+                                'asyncio': asyncio,
+                                'logger': logger,
+                                'th': tool_handler,
+                                'param_names': [p.name for p in tool_params],
+                                'Optional': Optional,
+                                'Dict': Dict,
+                                'List': List,
+                                'Any': Any
+                            }
+                            
+                            exec(func_code, {}, local_ns)
+                            sub_handler = local_ns['handler']
                             
                             # 设置函数属性
                             sub_handler.__name__ = tool_name
@@ -338,27 +355,44 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         
                         params_str = ", ".join(param_strs)
                         
-                        # 使用闭包创建动态函数（避免 exec 的作用域问题）
-                        def make_handler(th, param_names, t_name, t_desc, p_name):
-                            """创建工具处理器"""
-                            async def handler(**kwargs):
-                                try:
-                                    # 过滤参数
-                                    filtered_kwargs = {k: v for k, v in kwargs.items() if k in param_names}
-                                    result = th(**filtered_kwargs)
-                                    if asyncio.iscoroutine(result):
-                                        result = await result
-                                    return {"success": True, "data": result}
-                                except Exception as e:
-                                    logger.error(f"工具执行失败：{e}")
-                                    return {"success": False, "error": str(e)}
-                            
-                            # 设置函数属性（在闭包内设置，避免外部访问问题）
-                            handler.__name__ = t_name
-                            handler.__doc__ = f"{t_desc} (来自 {p_name} 技能包)"
-                            return handler
+                        # 动态创建有明确签名的函数
+                        import inspect
                         
-                        sub_handler = make_handler(tool_handler, [p.name for p in tool_params], tool_name, tool_desc, pkg_name)
+                        # 创建函数代码
+                        func_code = f"""
+async def handler({params_str}):
+    try:
+        kwargs = {{}}
+        for name in param_names:
+            if name in locals():
+                kwargs[name] = locals()[name]
+        result = th(**kwargs)
+        if asyncio.iscoroutine(result):
+            result = await result
+        return {{"success": True, "data": result}}
+    except Exception as e:
+        logger.error(f"工具执行失败：{{e}}")
+        return {{"success": False, "error": str(e)}}
+"""
+                        
+                        # 创建执行环境
+                        local_ns = {
+                            'asyncio': asyncio,
+                            'logger': logger,
+                            'th': tool_handler,
+                            'param_names': [p.name for p in tool_params],
+                            'Optional': Optional,
+                            'Dict': Dict,
+                            'List': List,
+                            'Any': Any
+                        }
+                        
+                        exec(func_code, {}, local_ns)
+                        sub_handler = local_ns['handler']
+                        
+                        # 设置函数属性
+                        sub_handler.__name__ = tool_name
+                        sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                         
                         # 注册子工具
                         provider.tool()(sub_handler)
