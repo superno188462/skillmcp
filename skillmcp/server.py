@@ -144,14 +144,14 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             # 动态创建有明确签名的函数（使用默认参数捕获变量）
                             # 创建函数代码
                             func_code = f"""
-async def handler({params_str}, _th=th, _p_names=p_names, _log=log):
+async def handler({params_str}, _th=th, _p_names=p_names, _log=log, _asyncio=asyncio):
     try:
         kwargs = {{}}
         for name in _p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
         result = _th(**kwargs)
-        if asyncio.iscoroutine(result):
+        if _asyncio.iscoroutine(result):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
@@ -356,14 +356,14 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         # 动态创建有明确签名的函数（使用默认参数捕获变量）
                         # 创建函数代码
                         func_code = f"""
-async def handler({params_str}, _th=th, _p_names=p_names, _log=log):
+async def handler({params_str}, _th=th, _p_names=p_names, _log=log, _asyncio=asyncio):
     try:
         kwargs = {{}}
         for name in _p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
         result = _th(**kwargs)
-        if asyncio.iscoroutine(result):
+        if _asyncio.iscoroutine(result):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
