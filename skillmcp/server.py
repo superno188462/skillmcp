@@ -331,109 +331,109 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                 sub_tool_names = []
                 
                 for tool in skill_tools:
-                    try:
-                        tool_name = tool.name
-                        tool_desc = tool.description if hasattr(tool, 'description') else ''
-                        tool_handler = tool.handler if hasattr(tool, 'handler') else None
-                        tool_params = tool.parameters if hasattr(tool, 'parameters') and tool.parameters else []
+                    tool_name = tool.name
+                    tool_desc = tool.description if hasattr(tool, 'description') else ''
+                    tool_handler = tool.handler if hasattr(tool, 'handler') else None
+                    tool_params = tool.parameters if hasattr(tool, 'parameters') and tool.parameters else []
+                    
+                    # 构建参数字符串
+                    param_strs = []
+                    for param in tool_params:
+                        param_name = param.name
+                        param_type = param.type if hasattr(param, 'type') else 'Any'
                         
-                        # 构建参数字符串
-                        param_strs = []
-                        for param in tool_params:
-                            param_name = param.name
-                            param_type = param.type if hasattr(param, 'type') else 'Any'
-                            
-                            # 处理类型映射
-                            if isinstance(param_type, str):
-                                type_str = param_type
-                            else:
-                                type_str = param_type.value if hasattr(param_type, 'value') else str(param_type)
-                            
-                            if type_str == 'object':
-                                param_type_str = 'Dict[str, Any]'
-                            elif type_str == 'array':
-                                param_type_str = 'List[Any]'
-                            elif type_str == 'string':
-                                param_type_str = 'str'
-                            elif type_str == 'number':
-                                param_type_str = 'float'
-                            elif type_str == 'integer':
-                                param_type_str = 'int'
-                            elif type_str == 'boolean':
-                                param_type_str = 'bool'
-                            else:
-                                param_type_str = 'Any'
-                            
-                            if hasattr(param, 'required') and param.required:
-                                param_strs.append(f"{param_name}: {param_type_str}")
-                            else:
-                                param_strs.append(f"{param_name}: Optional[{param_type_str}] = None")
+                        # 处理类型映射
+                        if isinstance(param_type, str):
+                            type_str = param_type
+                        else:
+                            type_str = param_type.value if hasattr(param_type, 'value') else str(param_type)
                         
-                        params_str = ", ".join(param_strs)
+                        if type_str == 'object':
+                            param_type_str = 'Dict[str, Any]'
+                        elif type_str == 'array':
+                            param_type_str = 'List[Any]'
+                        elif type_str == 'string':
+                            param_type_str = 'str'
+                        elif type_str == 'number':
+                            param_type_str = 'float'
+                        elif type_str == 'integer':
+                            param_type_str = 'int'
+                        elif type_str == 'boolean':
+                            param_type_str = 'bool'
+                        else:
+                            param_type_str = 'Any'
                         
-                        # 创建工具处理器（使用闭包捕获变量）
-                        th = tool_handler
-                        p_names = [p.name for p in tool_params]
-                        log = logger
-                        asc = asyncio
+                        if hasattr(param, 'required') and param.required:
+                            param_strs.append(f"{param_name}: {param_type_str}")
+                        else:
+                            param_strs.append(f"{param_name}: Optional[{param_type_str}] = None")
+                    
+                    params_str = ", ".join(param_strs)
+                    
+                    # 创建工具处理器（使用闭包捕获变量）
+                    th = tool_handler
+                    p_names = [p.name for p in tool_params]
+                    log = logger
+                    asc = asyncio
+                    
+                    # 创建包装函数
+                    async def sub_handler(**kwargs):
+                        try:
+                            # 过滤参数，只传递真正的参数
+                            filtered = {k: v for k, v in kwargs.items() if k in p_names}
+                            result = th(**filtered)
+                            if asc.iscoroutine(result):
+                                result = await result
+                            return {"success": True, "data": result}
+                        except Exception as e:
+                            log.error(f"工具执行失败：{e}")
+                            return {"success": False, "error": str(e)}
+                    
+                    # 设置函数属性
+                    sub_handler.__name__ = tool_name
+                    sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                    
+                    # 关键：创建正确的签名（只包含真正的参数）
+                    import inspect
+                    sig_params = []
+                    for p in tool_params:
+                        # 获取类型字符串
+                        p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
                         
-                        # 创建包装函数
-                        async def sub_handler(**kwargs):
-                            try:
-                                # 过滤参数，只传递真正的参数
-                                filtered = {k: v for k, v in kwargs.items() if k in p_names}
-                                result = th(**filtered)
-                                if asc.iscoroutine(result):
-                                    result = await result
-                                return {"success": True, "data": result}
-                            except Exception as e:
-                                log.error(f"工具执行失败：{e}")
-                                return {"success": False, "error": str(e)}
+                        # 映射到 Python 类型
+                        annotation_map = {
+                            'object': Dict[str, Any],
+                            'array': List[Any],
+                            'string': str,
+                            'number': float,
+                            'integer': int,
+                            'boolean': bool
+                        }
+                        annotation = annotation_map.get(p_type_str, Any)
                         
-                        # 设置函数属性
-                        sub_handler.__name__ = tool_name
-                        sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                        # 检查是否必需
+                        is_required = hasattr(p, 'required') and p.required
                         
-                        # 关键：创建正确的签名（只包含真正的参数）
-                        import inspect
-                        sig_params = []
-                        for p in tool_params:
-                            # 获取类型字符串
-                            p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                            
-                            # 映射到 Python 类型
-                            annotation_map = {
-                                'object': Dict[str, Any],
-                                'array': List[Any],
-                                'string': str,
-                                'number': float,
-                                'integer': int,
-                                'boolean': bool
-                            }
-                            annotation = annotation_map.get(p_type_str, Any)
-                            
-                            # 检查是否必需
-                            is_required = hasattr(p, 'required') and p.required
-                            
-                            sig_params.append(
-                                inspect.Parameter(
-                                    name=p.name,
-                                    kind=inspect.Parameter.KEYWORD_ONLY,
-                                    default=inspect.Parameter.empty if is_required else None,
-                                    annotation=annotation
-                                )
+                        sig_params.append(
+                            inspect.Parameter(
+                                name=p.name,
+                                kind=inspect.Parameter.KEYWORD_ONLY,
+                                default=inspect.Parameter.empty if is_required else None,
+                                annotation=annotation
                             )
-                        
-                        sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
-                        
-                        # 注册子工具
+                        )
+                    
+                    sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
+                    
+                    # 注册子工具
+                    try:
                         provider.tool()(sub_handler)
                         sub_tool_names.append(tool_name)
-                        
                         logger.info(f"自动注册子工具：{tool_name} (来自 {pkg_name})")
-                        
                     except Exception as e:
-                        logger.error(f"自动注册子工具失败：{e}")
+                        import traceback
+                        logger.error(f"注册子工具 {tool_name} 失败：{e}")
+                        logger.error(f"堆栈：{traceback.format_exc()}")
                 
                 _package_tools[pkg_name] = sub_tool_names
                 logger.info(f"技能包 {pkg_name} 已自动启用，注册了 {len(sub_tool_names)} 个子工具")
