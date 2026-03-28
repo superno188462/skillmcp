@@ -164,6 +164,16 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             sub_handler.__name__ = tool_name
                             sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                             
+                            # 映射到 Python 类型
+                            annotation_map = {
+                                'object': Dict[str, Any],
+                                'array': List[Any],
+                                'string': str,
+                                'number': float,
+                                'integer': int,
+                                'boolean': bool
+                            }
+                            
                             # 设置 __annotations__（FastMCP 需要这个）
                             sub_handler.__annotations__ = {
                                 p.name: annotation_map.get(
@@ -389,6 +399,16 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                     # 设置函数属性
                     sub_handler.__name__ = tool_name
                     sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                    
+                    # 映射到 Python 类型
+                    annotation_map = {
+                        'object': Dict[str, Any],
+                        'array': List[Any],
+                        'string': str,
+                        'number': float,
+                        'integer': int,
+                        'boolean': bool
+                    }
                     
                     # 设置 __annotations__（FastMCP 需要这个）
                     sub_handler.__annotations__ = {
