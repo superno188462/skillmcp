@@ -164,25 +164,22 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             sub_handler.__name__ = tool_name
                             sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                             
+                            # 设置 __annotations__（FastMCP 需要这个）
+                            sub_handler.__annotations__ = {
+                                p.name: annotation_map.get(
+                                    p.type.value if hasattr(p.type, 'value') else str(p.type),
+                                    Any
+                                )
+                                for p in tool_params
+                            }
+                            sub_handler.__annotations__['return'] = Dict[str, Any]
+                            
                             # 关键：创建正确的签名（只包含真正的参数）
                             import inspect
                             sig_params = []
                             for p in tool_params:
-                                # 获取类型字符串
                                 p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                                
-                                # 映射到 Python 类型
-                                annotation_map = {
-                                    'object': Dict[str, Any],
-                                    'array': List[Any],
-                                    'string': str,
-                                    'number': float,
-                                    'integer': int,
-                                    'boolean': bool
-                                }
                                 annotation = annotation_map.get(p_type_str, Any)
-                                
-                                # 检查是否必需
                                 is_required = hasattr(p, 'required') and p.required
                                 
                                 sig_params.append(
@@ -393,25 +390,22 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                     sub_handler.__name__ = tool_name
                     sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                     
+                    # 设置 __annotations__（FastMCP 需要这个）
+                    sub_handler.__annotations__ = {
+                        p.name: annotation_map.get(
+                            p.type.value if hasattr(p.type, 'value') else str(p.type),
+                            Any
+                        )
+                        for p in tool_params
+                    }
+                    sub_handler.__annotations__['return'] = Dict[str, Any]
+                    
                     # 关键：创建正确的签名（只包含真正的参数）
                     import inspect
                     sig_params = []
                     for p in tool_params:
-                        # 获取类型字符串
                         p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                        
-                        # 映射到 Python 类型
-                        annotation_map = {
-                            'object': Dict[str, Any],
-                            'array': List[Any],
-                            'string': str,
-                            'number': float,
-                            'integer': int,
-                            'boolean': bool
-                        }
                         annotation = annotation_map.get(p_type_str, Any)
-                        
-                        # 检查是否必需
                         is_required = hasattr(p, 'required') and p.required
                         
                         sig_params.append(
