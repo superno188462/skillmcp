@@ -234,7 +234,7 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                                     description=f"{tool_desc} (来自 {pkg_name} 技能包)",
                                     parameters=input_schema
                                 )
-                                provider._tool_manager.add_tool(tool_obj)
+                                provider.add_tool(tool_obj)
                                 sub_tool_names.append(tool_name)
                                 sub_tools_registered += 1
                                 logger.info(f"注册子工具：{tool_name} (来自 {pkg_name})")
@@ -449,7 +449,7 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                             description=f"{tool_desc} (来自 {pkg_name} 技能包)",
                             parameters=input_schema
                         )
-                        provider._tool_manager.add_tool(tool_obj)
+                        provider.add_tool(tool_obj)
                         sub_tool_names.append(tool_name)
                         logger.info(f"自动注册子工具：{tool_name} (来自 {pkg_name})")
                     except Exception as e:
