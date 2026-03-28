@@ -170,6 +170,7 @@ async def sub_handler({params_str}):
                                 'tool_handler': tool_handler,
                                 'Optional': Optional,
                                 'Dict': Dict,
+                                'List': List,
                                 'Any': Any
                             }
                             exec(func_code, {}, local_ns)
