@@ -141,42 +141,53 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             
                             params_str = ", ".join(param_strs)
                             
-                            # 动态创建有明确签名的函数（使用默认参数捕获变量）
-                            # 创建函数代码
-                            func_code = f"""
-async def handler({params_str}, _th=th, _p_names=p_names, _log=log, _asyncio=asyncio):
-    try:
-        kwargs = {{}}
-        for name in _p_names:
-            if name in locals():
-                kwargs[name] = locals()[name]
-        result = _th(**kwargs)
-        if _asyncio.iscoroutine(result):
-            result = await result
-        return {{"success": True, "data": result}}
-    except Exception as e:
-        _log.error(f"工具执行失败：{{e}}")
-        return {{"success": False, "error": str(e)}}
-"""
+                            # 创建工具处理器（使用闭包捕获变量）
+                            th = tool_handler
+                            p_names = [p.name for p in tool_params]
+                            log = logger
+                            asc = asyncio
                             
-                            # 创建执行环境
-                            local_ns = {
-                                'asyncio': asyncio,
-                                'log': logger,
-                                'th': tool_handler,
-                                'p_names': [p.name for p in tool_params],
-                                'Optional': Optional,
-                                'Dict': Dict,
-                                'List': List,
-                                'Any': Any
-                            }
-                            
-                            exec(func_code, {}, local_ns)
-                            sub_handler = local_ns['handler']
+                            # 创建包装函数
+                            async def sub_handler(**kwargs):
+                                try:
+                                    # 过滤参数，只传递真正的参数
+                                    filtered = {k: v for k, v in kwargs.items() if k in p_names}
+                                    result = th(**filtered)
+                                    if asc.iscoroutine(result):
+                                        result = await result
+                                    return {"success": True, "data": result}
+                                except Exception as e:
+                                    log.error(f"工具执行失败：{e}")
+                                    return {"success": False, "error": str(e)}
                             
                             # 设置函数属性
                             sub_handler.__name__ = tool_name
                             sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                            
+                            # 关键：创建正确的签名（只包含真正的参数）
+                            import inspect
+                            sig_params = []
+                            for p in tool_params:
+                                p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
+                                annotation = {
+                                    'object': Dict[str, Any],
+                                    'array': List[Any],
+                                    'string': str,
+                                    'number': float,
+                                    'integer': int,
+                                    'boolean': bool
+                                }.get(p_type_str, Any)
+                                
+                                sig_params.append(
+                                    inspect.Parameter(
+                                        name=p.name,
+                                        kind=inspect.Parameter.KEYWORD_ONLY,
+                                        default=inspect.Parameter.empty if hasattr(p, 'required') and p.required else None,
+                                        annotation=annotation
+                                    )
+                                )
+                            
+                            sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
                             
                             # 注册子工具
                             provider.tool()(sub_handler)
@@ -353,42 +364,53 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         
                         params_str = ", ".join(param_strs)
                         
-                        # 动态创建有明确签名的函数（使用默认参数捕获变量）
-                        # 创建函数代码
-                        func_code = f"""
-async def handler({params_str}, _th=th, _p_names=p_names, _log=log, _asyncio=asyncio):
-    try:
-        kwargs = {{}}
-        for name in _p_names:
-            if name in locals():
-                kwargs[name] = locals()[name]
-        result = _th(**kwargs)
-        if _asyncio.iscoroutine(result):
-            result = await result
-        return {{"success": True, "data": result}}
-    except Exception as e:
-        _log.error(f"工具执行失败：{{e}}")
-        return {{"success": False, "error": str(e)}}
-"""
+                        # 创建工具处理器（使用闭包捕获变量）
+                        th = tool_handler
+                        p_names = [p.name for p in tool_params]
+                        log = logger
+                        asc = asyncio
                         
-                        # 创建执行环境
-                        local_ns = {
-                            'asyncio': asyncio,
-                            'log': logger,
-                            'th': tool_handler,
-                            'p_names': [p.name for p in tool_params],
-                            'Optional': Optional,
-                            'Dict': Dict,
-                            'List': List,
-                            'Any': Any
-                        }
-                        
-                        exec(func_code, {}, local_ns)
-                        sub_handler = local_ns['handler']
+                        # 创建包装函数
+                        async def sub_handler(**kwargs):
+                            try:
+                                # 过滤参数，只传递真正的参数
+                                filtered = {k: v for k, v in kwargs.items() if k in p_names}
+                                result = th(**filtered)
+                                if asc.iscoroutine(result):
+                                    result = await result
+                                return {"success": True, "data": result}
+                            except Exception as e:
+                                log.error(f"工具执行失败：{e}")
+                                return {"success": False, "error": str(e)}
                         
                         # 设置函数属性
                         sub_handler.__name__ = tool_name
                         sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                        
+                        # 关键：创建正确的签名（只包含真正的参数）
+                        import inspect
+                        sig_params = []
+                        for p in tool_params:
+                            p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
+                            annotation = {
+                                'object': Dict[str, Any],
+                                'array': List[Any],
+                                'string': str,
+                                'number': float,
+                                'integer': int,
+                                'boolean': bool
+                            }.get(p_type_str, Any)
+                            
+                            sig_params.append(
+                                inspect.Parameter(
+                                    name=p.name,
+                                    kind=inspect.Parameter.KEYWORD_ONLY,
+                                    default=inspect.Parameter.empty if hasattr(p, 'required') and p.required else None,
+                                    annotation=annotation
+                                )
+                            )
+                        
+                        sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
                         
                         # 注册子工具
                         provider.tool()(sub_handler)
