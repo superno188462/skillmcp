@@ -149,7 +149,7 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
 async def handler({params_str}):
     try:
         kwargs = {{}}
-        for name in param_names:
+        for name in p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
         result = th(**kwargs)
@@ -157,16 +157,16 @@ async def handler({params_str}):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
-        logger.error(f"工具执行失败：{{e}}")
+        log.error(f"工具执行失败：{{e}}")
         return {{"success": False, "error": str(e)}}
 """
                             
                             # 创建执行环境
                             local_ns = {
                                 'asyncio': asyncio,
-                                'logger': logger,
+                                'log': logger,
                                 'th': tool_handler,
-                                'param_names': [p.name for p in tool_params],
+                                'p_names': [p.name for p in tool_params],
                                 'Optional': Optional,
                                 'Dict': Dict,
                                 'List': List,
@@ -363,7 +363,7 @@ for pkg_name, pkg_info in _package_manager.packages.items():
 async def handler({params_str}):
     try:
         kwargs = {{}}
-        for name in param_names:
+        for name in p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
         result = th(**kwargs)
@@ -371,16 +371,16 @@ async def handler({params_str}):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
-        logger.error(f"工具执行失败：{{e}}")
+        log.error(f"工具执行失败：{{e}}")
         return {{"success": False, "error": str(e)}}
 """
                         
                         # 创建执行环境
                         local_ns = {
                             'asyncio': asyncio,
-                            'logger': logger,
+                            'log': logger,
                             'th': tool_handler,
-                            'param_names': [p.name for p in tool_params],
+                            'p_names': [p.name for p in tool_params],
                             'Optional': Optional,
                             'Dict': Dict,
                             'List': List,
