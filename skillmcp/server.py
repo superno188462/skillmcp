@@ -141,23 +141,21 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             
                             params_str = ", ".join(param_strs)
                             
-                            # 动态创建有明确签名的函数
-                            import inspect
-                            
+                            # 动态创建有明确签名的函数（使用默认参数捕获变量）
                             # 创建函数代码
                             func_code = f"""
-async def handler({params_str}):
+async def handler({params_str}, _th=th, _p_names=p_names, _log=log):
     try:
         kwargs = {{}}
-        for name in p_names:
+        for name in _p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
-        result = th(**kwargs)
+        result = _th(**kwargs)
         if asyncio.iscoroutine(result):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
-        log.error(f"工具执行失败：{{e}}")
+        _log.error(f"工具执行失败：{{e}}")
         return {{"success": False, "error": str(e)}}
 """
                             
@@ -355,23 +353,21 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         
                         params_str = ", ".join(param_strs)
                         
-                        # 动态创建有明确签名的函数
-                        import inspect
-                        
+                        # 动态创建有明确签名的函数（使用默认参数捕获变量）
                         # 创建函数代码
                         func_code = f"""
-async def handler({params_str}):
+async def handler({params_str}, _th=th, _p_names=p_names, _log=log):
     try:
         kwargs = {{}}
-        for name in p_names:
+        for name in _p_names:
             if name in locals():
                 kwargs[name] = locals()[name]
-        result = th(**kwargs)
+        result = _th(**kwargs)
         if asyncio.iscoroutine(result):
             result = await result
         return {{"success": True, "data": result}}
     except Exception as e:
-        log.error(f"工具执行失败：{{e}}")
+        _log.error(f"工具执行失败：{{e}}")
         return {{"success": False, "error": str(e)}}
 """
                         
