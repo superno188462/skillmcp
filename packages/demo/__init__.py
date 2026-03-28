@@ -26,7 +26,7 @@ SKILL_PACKAGE = {
     # 字段 2: default_enabled - 是否默认启用
     # True: 服务器启动时自动启用
     # False (默认): 需要手动启用
-    "default_enabled": False,
+    "default_enabled": False,  # 暂时改为 False，等待修复 **kwargs 问题
 }
 
 

@@ -309,28 +309,37 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         for param in tool_params:
                             param_name = param.name
                             param_type = param.type if hasattr(param, 'type') else 'Any'
-                            if param_type == 'object':
-                                param_type = 'Dict[str, Any]'
-                            elif param_type == 'string':
-                                param_type = 'str'
-                            elif param_type == 'number':
-                                param_type = 'float'
-                            elif param_type == 'integer':
-                                param_type = 'int'
-                            elif param_type == 'boolean':
-                                param_type = 'bool'
+                            
+                            # 处理类型映射
+                            if isinstance(param_type, str):
+                                type_str = param_type
                             else:
-                                param_type = 'Any'
+                                type_str = param_type.value if hasattr(param_type, 'value') else str(param_type)
+                            
+                            if type_str == 'object':
+                                param_type_str = 'Dict[str, Any]'
+                            elif type_str == 'array':
+                                param_type_str = 'List[Any]'
+                            elif type_str == 'string':
+                                param_type_str = 'str'
+                            elif type_str == 'number':
+                                param_type_str = 'float'
+                            elif type_str == 'integer':
+                                param_type_str = 'int'
+                            elif type_str == 'boolean':
+                                param_type_str = 'bool'
+                            else:
+                                param_type_str = 'Any'
                             
                             if hasattr(param, 'required') and param.required:
-                                param_strs.append(f"{param_name}: {param_type}")
+                                param_strs.append(f"{param_name}: {param_type_str}")
                             else:
-                                param_strs.append(f"{param_name}: Optional[{param_type}] = None")
+                                param_strs.append(f"{param_name}: Optional[{param_type_str}] = None")
                         
                         params_str = ", ".join(param_strs)
                         
                         # 使用闭包创建动态函数（避免 exec 的作用域问题）
-                        def make_handler(th, param_names):
+                        def make_handler(th, param_names, t_name, t_desc, p_name):
                             """创建工具处理器"""
                             async def handler(**kwargs):
                                 try:
@@ -343,13 +352,13 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                                 except Exception as e:
                                     logger.error(f"工具执行失败：{e}")
                                     return {"success": False, "error": str(e)}
+                            
+                            # 设置函数属性（在闭包内设置，避免外部访问问题）
+                            handler.__name__ = t_name
+                            handler.__doc__ = f"{t_desc} (来自 {p_name} 技能包)"
                             return handler
                         
-                        sub_handler = make_handler(tool_handler, [p.name for p in tool_params])
-                        
-                        # 设置函数属性
-                        sub_handler.__name__ = tool_name
-                        sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
+                        sub_handler = make_handler(tool_handler, [p.name for p in tool_params], tool_name, tool_desc, pkg_name)
                         
                         # 注册子工具
                         provider.tool()(sub_handler)
