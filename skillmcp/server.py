@@ -168,21 +168,28 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             import inspect
                             sig_params = []
                             for p in tool_params:
+                                # 获取类型字符串
                                 p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                                annotation = {
+                                
+                                # 映射到 Python 类型
+                                annotation_map = {
                                     'object': Dict[str, Any],
                                     'array': List[Any],
                                     'string': str,
                                     'number': float,
                                     'integer': int,
                                     'boolean': bool
-                                }.get(p_type_str, Any)
+                                }
+                                annotation = annotation_map.get(p_type_str, Any)
+                                
+                                # 检查是否必需
+                                is_required = hasattr(p, 'required') and p.required
                                 
                                 sig_params.append(
                                     inspect.Parameter(
                                         name=p.name,
                                         kind=inspect.Parameter.KEYWORD_ONLY,
-                                        default=inspect.Parameter.empty if hasattr(p, 'required') and p.required else None,
+                                        default=inspect.Parameter.empty if is_required else None,
                                         annotation=annotation
                                     )
                                 )
@@ -391,21 +398,28 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                         import inspect
                         sig_params = []
                         for p in tool_params:
+                            # 获取类型字符串
                             p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                            annotation = {
+                            
+                            # 映射到 Python 类型
+                            annotation_map = {
                                 'object': Dict[str, Any],
                                 'array': List[Any],
                                 'string': str,
                                 'number': float,
                                 'integer': int,
                                 'boolean': bool
-                            }.get(p_type_str, Any)
+                            }
+                            annotation = annotation_map.get(p_type_str, Any)
+                            
+                            # 检查是否必需
+                            is_required = hasattr(p, 'required') and p.required
                             
                             sig_params.append(
                                 inspect.Parameter(
                                     name=p.name,
                                     kind=inspect.Parameter.KEYWORD_ONLY,
-                                    default=inspect.Parameter.empty if hasattr(p, 'required') and p.required else None,
+                                    default=inspect.Parameter.empty if is_required else None,
                                     annotation=annotation
                                 )
                             )
