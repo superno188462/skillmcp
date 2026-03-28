@@ -10,11 +10,68 @@ SkillMCP - 基于 FastMCP Provider 系统的动态工具加载平台
 
 from fastmcp import FastMCP
 from fastmcp.server.providers import LocalProvider
-from typing import Dict, List, Any, Optional
+from fastmcp.tools import Tool as FastMCPTool
+from fastmcp.utilities.json_schema import normalize_json_schema
+from typing import Dict, List, Any, Optional, Callable
 from loguru import logger
 import asyncio
+import inspect
 
 from skillmcp.core.package_manager import ToolPackageManager
+
+
+def build_json_schema(tool_params):
+    """
+    将 ToolParameter 列表转换为完整的 JSON Schema
+    
+    支持：
+    - 基础类型：string, number, integer, boolean
+    - 复杂类型：object (带 properties), array (带 items)
+    - 必需字段：required
+    - 嵌套结构：对象数组、数组中的对象等
+    """
+    properties = {}
+    required = []
+    
+    for param in tool_params:
+        param_name = param.name
+        param_type = param.type.value if hasattr(param.type, 'value') else str(param.type)
+        
+        # 构建基础 schema
+        schema = {
+            "type": param_type,
+            "description": param.description if hasattr(param, 'description') else ""
+        }
+        
+        # 处理 object 类型
+        if param_type == "object" and hasattr(param, 'items') and param.items:
+            if "properties" in param.items:
+                schema["properties"] = param.items["properties"]
+                if "required" in param.items:
+                    schema["required"] = param.items["required"]
+        
+        # 处理 array 类型
+        if param_type == "array":
+            if hasattr(param, 'items') and param.items:
+                schema["items"] = param.items
+            else:
+                schema["items"] = {}
+        
+        # 添加必需字段
+        if hasattr(param, 'required') and param.required:
+            required.append(param_name)
+        
+        properties[param_name] = schema
+    
+    result = {
+        "type": "object",
+        "properties": properties
+    }
+    
+    if required:
+        result["required"] = required
+    
+    return normalize_json_schema(result)
 
 
 # 创建 LocalProvider
@@ -164,49 +221,25 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             sub_handler.__name__ = tool_name
                             sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                             
-                            # 映射到 Python 类型
-                            annotation_map = {
-                                'object': Dict[str, Any],
-                                'array': List[Any],
-                                'string': str,
-                                'number': float,
-                                'integer': int,
-                                'boolean': bool
-                            }
+                            # 构建完整的 JSON Schema
+                            input_schema = build_json_schema(tool_params)
                             
-                            # 设置 __annotations__（FastMCP 需要这个）
-                            sub_handler.__annotations__ = {
-                                p.name: annotation_map.get(
-                                    p.type.value if hasattr(p.type, 'value') else str(p.type),
-                                    Any
+                            # 使用 FastMCP Tool 直接注册（支持完整 JSON Schema）
+                            try:
+                                tool_obj = FastMCPTool.from_function(
+                                    fn=sub_handler,
+                                    name=tool_name,
+                                    description=f"{tool_desc} (来自 {pkg_name} 技能包)",
+                                    parameters=input_schema
                                 )
-                                for p in tool_params
-                            }
-                            sub_handler.__annotations__['return'] = Dict[str, Any]
-                            
-                            # 关键：创建正确的签名（只包含真正的参数）
-                            import inspect
-                            sig_params = []
-                            for p in tool_params:
-                                p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                                annotation = annotation_map.get(p_type_str, Any)
-                                is_required = hasattr(p, 'required') and p.required
-                                
-                                sig_params.append(
-                                    inspect.Parameter(
-                                        name=p.name,
-                                        kind=inspect.Parameter.KEYWORD_ONLY,
-                                        default=inspect.Parameter.empty if is_required else None,
-                                        annotation=annotation
-                                    )
-                                )
-                            
-                            sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
-                            
-                            # 注册子工具
-                            provider.tool()(sub_handler)
-                            sub_tool_names.append(tool_name)
-                            sub_tools_registered += 1
+                                provider._tool_manager.add_tool(tool_obj)
+                                sub_tool_names.append(tool_name)
+                                sub_tools_registered += 1
+                                logger.info(f"注册子工具：{tool_name} (来自 {pkg_name})")
+                            except Exception as e:
+                                import traceback
+                                logger.error(f"注册子工具 {tool_name} 失败：{e}")
+                                logger.error(f"堆栈：{traceback.format_exc()}")
                             
                             logger.info(f"注册子工具：{tool_name} (来自 {pkg_name})")
                             
@@ -400,48 +433,18 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                     sub_handler.__name__ = tool_name
                     sub_handler.__doc__ = f"{tool_desc} (来自 {pkg_name} 技能包)"
                     
-                    # 映射到 Python 类型
-                    annotation_map = {
-                        'object': Dict[str, Any],
-                        'array': List[Any],
-                        'string': str,
-                        'number': float,
-                        'integer': int,
-                        'boolean': bool
-                    }
+                    # 构建完整的 JSON Schema
+                    input_schema = build_json_schema(tool_params)
                     
-                    # 设置 __annotations__（FastMCP 需要这个）
-                    sub_handler.__annotations__ = {
-                        p.name: annotation_map.get(
-                            p.type.value if hasattr(p.type, 'value') else str(p.type),
-                            Any
-                        )
-                        for p in tool_params
-                    }
-                    sub_handler.__annotations__['return'] = Dict[str, Any]
-                    
-                    # 关键：创建正确的签名（只包含真正的参数）
-                    import inspect
-                    sig_params = []
-                    for p in tool_params:
-                        p_type_str = p.type.value if hasattr(p.type, 'value') else str(p.type)
-                        annotation = annotation_map.get(p_type_str, Any)
-                        is_required = hasattr(p, 'required') and p.required
-                        
-                        sig_params.append(
-                            inspect.Parameter(
-                                name=p.name,
-                                kind=inspect.Parameter.KEYWORD_ONLY,
-                                default=inspect.Parameter.empty if is_required else None,
-                                annotation=annotation
-                            )
-                        )
-                    
-                    sub_handler.__signature__ = inspect.Signature(parameters=sig_params)
-                    
-                    # 注册子工具
+                    # 使用 FastMCP Tool 直接注册（支持完整 JSON Schema）
                     try:
-                        provider.tool()(sub_handler)
+                        tool_obj = FastMCPTool.from_function(
+                            fn=sub_handler,
+                            name=tool_name,
+                            description=f"{tool_desc} (来自 {pkg_name} 技能包)",
+                            parameters=input_schema
+                        )
+                        provider._tool_manager.add_tool(tool_obj)
                         sub_tool_names.append(tool_name)
                         logger.info(f"自动注册子工具：{tool_name} (来自 {pkg_name})")
                     except Exception as e:
