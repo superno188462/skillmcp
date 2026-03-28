@@ -225,7 +225,10 @@ def create_package_tool(package_name: str, package_info: dict) -> None:
                             
                             # 使用 FastMCP Tool 直接注册（支持完整 JSON Schema）
                             try:
-                                tool_obj = FastMCPTool.from_function(
+                                from fastmcp.tools import FunctionTool
+                                
+                                # 创建 FunctionTool 对象
+                                tool_obj = FunctionTool(
                                     fn=sub_handler,
                                     name=tool_name,
                                     description=f"{tool_desc} (来自 {pkg_name} 技能包)",
@@ -437,7 +440,10 @@ for pkg_name, pkg_info in _package_manager.packages.items():
                     
                     # 使用 FastMCP Tool 直接注册（支持完整 JSON Schema）
                     try:
-                        tool_obj = FastMCPTool.from_function(
+                        from fastmcp.tools import FunctionTool
+                        
+                        # 创建 FunctionTool 对象
+                        tool_obj = FunctionTool(
                             fn=sub_handler,
                             name=tool_name,
                             description=f"{tool_desc} (来自 {pkg_name} 技能包)",
