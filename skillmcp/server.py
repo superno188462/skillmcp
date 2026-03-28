@@ -11,7 +11,6 @@ SkillMCP - 基于 FastMCP Provider 系统的动态工具加载平台
 from fastmcp import FastMCP
 from fastmcp.server.providers import LocalProvider
 from fastmcp.tools import Tool as FastMCPTool
-from fastmcp.utilities.json_schema import normalize_json_schema
 from typing import Dict, List, Any, Optional, Callable
 from loguru import logger
 import asyncio
@@ -71,7 +70,7 @@ def build_json_schema(tool_params):
     if required:
         result["required"] = required
     
-    return normalize_json_schema(result)
+    return result
 
 
 # 创建 LocalProvider
